@@ -11,6 +11,7 @@ interface Props {
   gradient: [string, string, string]
   eyeColor: string
   lookAround: number
+  gaze: { x: number; y: number }
   motion: number
   effects: boolean
   glyphs: boolean
@@ -22,6 +23,7 @@ export function ExportPanel({
   gradient,
   eyeColor,
   lookAround,
+  gaze,
   motion,
   effects,
   glyphs,
@@ -42,11 +44,12 @@ export function ExportPanel({
         gradient,
         eyeColor,
         lookAround,
+        gaze,
         motion,
         effects,
         glyphs,
       }),
-    [raw, shape, gradient, eyeColor, lookAround, motion, effects, glyphs]
+    [raw, shape, gradient, eyeColor, lookAround, gaze, motion, effects, glyphs]
   )
 
   // Test seam: lets an automated run assert against the exact source a user would download.
@@ -129,6 +132,7 @@ export function ExportPanel({
                 gradient,
                 eyeColor,
                 lookAround,
+                gaze,
                 motion,
                 effects,
                 glyphs,

@@ -16,6 +16,7 @@ export interface ExportOptions {
   gradient: [string, string, string]
   eyeColor: string
   lookAround: number
+  gaze: { x: number; y: number }
   motion: number
   effects: boolean
   glyphs: boolean
@@ -25,7 +26,8 @@ const SHAPE_START = '/* __SHAPE_START__ */'
 const SHAPE_END = '/* __SHAPE_END__ */'
 
 export function generateComponent(options: ExportOptions): string {
-  const { componentName, shape, gradient, eyeColor, lookAround, motion, effects, glyphs } = options
+  const { componentName, shape, gradient, eyeColor, lookAround, gaze, motion, effects, glyphs } =
+    options
   const base = sanitizeName(componentName)
 
   let source = engineSource
@@ -46,6 +48,10 @@ export function generateComponent(options: ExportOptions): string {
   )
   source = source.replace(/eyeColor = '#ffffff'/, `eyeColor = ${JSON.stringify(eyeColor)}`)
   source = source.replace(/lookAround = 0\.35/g, `lookAround = ${lookAround}`)
+  source = source.replace(
+    /export const DEFAULT_GAZE: \{ x: number; y: number \} = \{[^}]*\}/,
+    `export const DEFAULT_GAZE: { x: number; y: number } = { x: ${gaze.x}, y: ${gaze.y} }`
+  )
   source = source.replace(
     /const motionStrength = motion \?\? \(prefersReducedMotion \? 0 : 1\)/,
     `const motionStrength = motion ?? (prefersReducedMotion ? 0 : ${motion})`

@@ -14,6 +14,7 @@ import {
   EXPRESSIONS,
   FACE_CENTRE,
   GAZE,
+  GAZE_TRAVEL,
   MOUTHS,
   MOUTH_STROKE,
   mouthFrame,
@@ -41,11 +42,26 @@ interface Cloud {
   need: Float32Array
 }
 
-/** Builds the point cloud per expression. lookAround must match what the engine renders. */
-export function buildClouds(lookAround: number, mouthStroke = MOUTH_STROKE): Cloud[] {
+export interface Aim {
+  x: number
+  y: number
+}
+
+/**
+ * Builds the point cloud per expression. `lookAround` and `aim` must match what the engine
+ * renders, or the clipping report will disagree with what people can plainly see: aiming
+ * the eyes at an edge moves every face point toward it.
+ */
+export function buildClouds(
+  lookAround: number,
+  mouthStroke = MOUTH_STROKE,
+  aim: Aim = { x: 0, y: 0 }
+): Cloud[] {
+  const aimX = clamp(aim.x, -1, 1) * GAZE_TRAVEL.x
+  const aimY = clamp(aim.y, -1, 1) * GAZE_TRAVEL.y
   return EXPRESSIONS.map((ex, k) => {
-    const ox = GAZE[k][0] * lookAround
-    const oy = GAZE[k][1] * lookAround
+    const ox = GAZE[k][0] * lookAround + aimX
+    const oy = GAZE[k][1] * lookAround + aimY
     const rings = ex.map(ring => ring.map(p => [p[0] + ox, p[1] + oy] as [number, number]))
 
     const xs: number[] = []
@@ -122,8 +138,13 @@ function maxScaleAt(clouds: Cloud[], sdf: Sdf, ax: number, ay: number, cap: numb
  * Finds the best placement. `lookAround` matters: centring the expressions shrinks the
  * face's footprint, which lets it be meaningfully larger on the same silhouette.
  */
-export function solveFit(sdf: Sdf, lookAround: number, mouthStroke = MOUTH_STROKE): FitResult {
-  const clouds = buildClouds(lookAround, mouthStroke)
+export function solveFit(
+  sdf: Sdf,
+  lookAround: number,
+  mouthStroke = MOUTH_STROKE,
+  aim: Aim = { x: 0, y: 0 }
+): FitResult {
+  const clouds = buildClouds(lookAround, mouthStroke, aim)
   const seed = largestInscribedCircle(sdf)
 
   // Cap at the size the expressions were drawn for. The artwork is fitted to the same box
@@ -186,3 +207,5 @@ export function report(
 }
 
 const round = (n: number, places = 2) => Number(n.toFixed(places))
+
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))

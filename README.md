@@ -81,6 +81,20 @@ most forward-facing member. Cycle order is otherwise untouched, so nothing loses
 sharing the generic `[0,8]` pool also gain expression 6, which is symmetric, upright, and
 was used by no state at all.
 
+## Gaze
+
+Two different things aim the eyes, and they compose:
+
+- **`lookAround`** is per-expression drift — how much of each expression's own baked-in
+  look-direction to apply. It varies as expressions cycle.
+- **`gaze`** is a constant aim on top of that, each axis −1…1. The studio's pad sets it; it
+  defaults slightly right, because dead-centre eyes read as a stare rather than as
+  attention.
+
+The fit solver accounts for gaze, not just `lookAround`. Aiming the eyes at an edge moves
+every point of every face toward it, so the clipping report has to include it or it would
+claim a fit that anyone can see is wrong.
+
 ## Body motion
 
 The face engine on its own leaves the silhouette perfectly still, which reads as dead for

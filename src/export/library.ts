@@ -108,6 +108,7 @@ function manifest(base: string, options: LibraryOptions): string {
         gradient: options.gradient,
         eyeColor: options.eyeColor,
         lookAround: options.lookAround,
+        gaze: options.gaze,
         motion: options.motion,
         effects: options.effects,
         glyphs: options.glyphs,

@@ -193,13 +193,21 @@ export const SHAPE: MascotShape = {
 
 export const DEFAULT_GRADIENT: [string, string, string] = ['#9FE6B5', '#3FAE6E', '#1C7A4C']
 
+/**
+ * Where the eyes rest when no gaze is passed. Slightly off-centre reads as alive; dead
+ * centre can look like a stare. Each axis is -1…1.
+ */
+export const DEFAULT_GAZE: { x: number; y: number } = { x: 0, y: 0 }
+
 /** The face box every coordinate in this file is expressed in. */
 export const FACE_BOX = 228.541
 const VIEW_BOX = \`-15 -15 \${FACE_BOX + 30} \${FACE_BOX + 30}\`
 const SPHERE_C = 114.2705
 const SPHERE_R = 105
-const GAZE_X = 13.2
-const GAZE_Y = 8.4
+/** How far a full-deflection gaze moves the eyes, in face units. */
+export const GAZE_TRAVEL = { x: 13.2, y: 8.4 }
+const GAZE_X = GAZE_TRAVEL.x
+const GAZE_Y = GAZE_TRAVEL.y
 
 /** Face-space centre the expressions are normalised around. */
 export const FACE_CENTRE: [number, number] = [120, 122.5]
@@ -555,7 +563,7 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       state = 'idle',
       expression,
       size = 160,
-      gaze,
+      gaze = DEFAULT_GAZE,
       turn = 0,
       lookAround = 0.35,
       flip = false,

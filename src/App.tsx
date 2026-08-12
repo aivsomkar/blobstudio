@@ -14,6 +14,7 @@ import { buildSdf, type Sdf } from './fit/sdf'
 import { buildClouds, report, solveFit } from './fit/solve'
 import { BUILTIN_SHAPES, builtinToSvg } from './shapes/builtin'
 import { Dropzone } from './ui/Dropzone'
+import { GazePad, type Aim } from './ui/GazePad'
 import { FitPanel } from './ui/FitPanel'
 import { ColorPanel } from './ui/ColorPanel'
 import { StateGrid } from './ui/StateGrid'
@@ -33,6 +34,8 @@ export default function App() {
   const [state, setState] = useState<MascotState>('idle')
   const [expression, setExpression] = useState<number | undefined>(undefined)
   const [lookAround, setLookAround] = useState(0.35)
+  // A touch off-centre by default: dead-centre eyes read as a stare.
+  const [gaze, setGaze] = useState<Aim>({ x: 0.22, y: 0 })
   const [motion, setMotion] = useState(1)
   const [gradient, setGradient] = useState<[string, string, string]>(DEFAULT_GRADIENT)
   const [eyeColor, setEyeColor] = useState('#ffffff')
@@ -41,6 +44,8 @@ export default function App() {
   const [glyphs, setGlyphs] = useState(true)
   const [useGradient, setUseGradient] = useState(true)
   const avatar = useRef<MascotAvatarHandle>(null)
+  const gazeRef = useRef(gaze)
+  gazeRef.current = gaze
 
   /** Import markup, measure it, and place the face. Shared by uploads and builtins. */
   const load = useCallback(
@@ -50,7 +55,7 @@ export default function App() {
       try {
         const imported = importSvg(source, name)
         const sdf = await buildSdf(imported.clip || imported.body, imported.fit)
-        const fit = solveFit(sdf, lookAround)
+        const fit = solveFit(sdf, lookAround, undefined, gazeRef.current)
         setMascot({ name, imported, anchor: fit.anchor, sdf })
         // Someone uploading finished artwork wants to keep its colours. The built-ins are
         // plain silhouettes drawn to take the gradient, so they start recoloured.
@@ -90,14 +95,16 @@ export default function App() {
   /** Live clipping report — recomputed whenever the placement or gaze changes. */
   const fitReport = useMemo(() => {
     if (!mascot) return null
-    return report(buildClouds(lookAround), mascot.sdf, mascot.anchor)
-  }, [mascot, lookAround])
+    return report(buildClouds(lookAround, undefined, gaze), mascot.sdf, mascot.anchor)
+  }, [mascot, lookAround, gaze])
 
   const setAnchor = (next: Partial<Mascot['anchor']>) =>
     setMascot(m => (m ? { ...m, anchor: { ...m.anchor, ...next } } : m))
 
   const autoFit = () =>
-    setMascot(m => (m ? { ...m, anchor: solveFit(m.sdf, lookAround).anchor } : m))
+    setMascot(m =>
+      m ? { ...m, anchor: solveFit(m.sdf, lookAround, undefined, gaze).anchor } : m
+    )
 
   const onUpload = async (file: File) => {
     const text = await file.text()
@@ -133,6 +140,7 @@ export default function App() {
                 state={state}
                 expression={expression}
                 lookAround={lookAround}
+                gaze={gaze}
                 motion={motion}
                 effects={effects}
                 glyphs={glyphs}
@@ -204,6 +212,8 @@ export default function App() {
             />
           )}
 
+          <GazePad gaze={gaze} onChange={setGaze} />
+
           <ColorPanel
             gradient={gradient}
             onGradient={setGradient}
@@ -246,6 +256,7 @@ export default function App() {
               gradient={gradient}
               eyeColor={eyeColor}
               lookAround={lookAround}
+              gaze={gaze}
               motion={motion}
               effects={effects}
               glyphs={glyphs}
@@ -261,6 +272,7 @@ export default function App() {
           eyeColor={eyeColor}
           showMouth={showMouth}
           lookAround={lookAround}
+          gaze={gaze}
           motion={motion}
           effects={effects}
           glyphs={glyphs}

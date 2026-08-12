@@ -6,6 +6,7 @@ interface Props {
   eyeColor: string
   showMouth: boolean
   lookAround: number
+  gaze: { x: number; y: number }
   motion: number
   effects: boolean
   glyphs: boolean
@@ -21,6 +22,7 @@ export function StateGrid({
   eyeColor,
   showMouth,
   lookAround,
+  gaze,
   motion,
   effects,
   glyphs,
@@ -47,6 +49,7 @@ export function StateGrid({
                   eyeColor={eyeColor}
                   showMouth={showMouth}
                   lookAround={lookAround}
+                  gaze={gaze}
                   motion={motion}
                   effects={effects}
                   glyphs={glyphs}
