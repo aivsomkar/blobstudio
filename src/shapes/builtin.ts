@@ -23,6 +23,15 @@ const SQUIRCLE =
 const BLOB =
   `<path fill="{{GRADIENT}}" d="M200 100C200 113.9 197.1 127.8 191.5 140.5C186.2 152.5 178.5 163.4 169 172.4C136.5 203.3 87.1 208.8 48.6 185.7C39.5 180.2 31.2 173.3 24.3 165.2C16.8 156.5 10.8 146.6 6.7 135.9C2.3 124.4 0 112.2 0 100C0 86.1 2.9 72.2 8.5 59.4C13.9 47.4 21.6 36.5 31.1 27.5C63.6 -3.4 113 -8.8 151.5 14.2C160.6 19.7 168.9 26.6 175.8 34.6C183.3 43.3 189.3 53.2 193.4 63.9C197.8 75.4 200 87.6 200 100Z"/>`
 
+// A closed ring of outward-bulging arcs — lobed underneath as well as on top, so it reads
+// as a cloud rather than a cloud resting on a shelf.
+//
+// One path rather than overlapping circles: the gradient resolves per element, so a cloud
+// assembled from separate bumps would show a seam wherever two of them met.
+const CLOUD =
+  `<path fill="{{GRADIENT}}" d="M18 100A30 30 0 0 1 42 58A37 37 0 0 1 100 40A37 37 0 0 1 158 58` +
+  `A30 30 0 0 1 182 100A30 30 0 0 1 158 142A37 37 0 0 1 100 160A37 37 0 0 1 42 142A30 30 0 0 1 18 100Z"/>`
+
 // Deliberately lopsided: its widest region is nowhere near the bounding-box centre, so it
 // shows that the fit is solved rather than guessed.
 const DROP =
@@ -38,6 +47,7 @@ export const BUILTIN_SHAPES: BuiltinShape[] = [
   { id: 'circle', name: 'Circle', markup: CIRCLE, viewBox: '0 0 200 200' },
   { id: 'squircle', name: 'Squircle', markup: SQUIRCLE, viewBox: '0 0 200 200' },
   { id: 'blob', name: 'Blob', markup: BLOB, viewBox: '0 0 200 200' },
+  { id: 'cloud', name: 'Cloud', markup: CLOUD, viewBox: '0 0 200 200' },
   { id: 'hex', name: 'Hex', markup: HEX, viewBox: '0 0 200 200' },
   { id: 'star', name: 'Star', markup: STAR, viewBox: '0 0 200 200' },
   { id: 'drop', name: 'Drop', markup: DROP, viewBox: '0 0 200 200' },
