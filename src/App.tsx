@@ -33,6 +33,7 @@ export default function App() {
   const [state, setState] = useState<MascotState>('idle')
   const [expression, setExpression] = useState<number | undefined>(undefined)
   const [lookAround, setLookAround] = useState(0.35)
+  const [motion, setMotion] = useState(1)
   const [gradient, setGradient] = useState<[string, string, string]>(DEFAULT_GRADIENT)
   const [eyeColor, setEyeColor] = useState('#ffffff')
   const [showMouth, setShowMouth] = useState(true)
@@ -130,6 +131,7 @@ export default function App() {
                 state={state}
                 expression={expression}
                 lookAround={lookAround}
+                motion={motion}
                 gradient={gradient}
                 eyeColor={eyeColor}
                 showMouth={showMouth}
@@ -176,6 +178,8 @@ export default function App() {
               onAuto={autoFit}
               lookAround={lookAround}
               onLookAround={setLookAround}
+              motion={motion}
+              onMotion={setMotion}
               clipping={fitReport?.clipping ?? []}
               clearance={fitReport?.clearance ?? 0}
               total={EXPRESSION_COUNT}
@@ -224,6 +228,7 @@ export default function App() {
               gradient={gradient}
               eyeColor={eyeColor}
               lookAround={lookAround}
+              motion={motion}
             />
           )}
         </section>
@@ -236,6 +241,7 @@ export default function App() {
           eyeColor={eyeColor}
           showMouth={showMouth}
           lookAround={lookAround}
+          motion={motion}
           active={state}
           onPick={s => {
             setState(s)

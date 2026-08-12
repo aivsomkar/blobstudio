@@ -81,6 +81,25 @@ most forward-facing member. Cycle order is otherwise untouched, so nothing loses
 sharing the generic `[0,8]` pool also gain expression 6, which is symmetric, upright, and
 was used by no state at all.
 
+## Body motion
+
+The face engine on its own leaves the silhouette perfectly still, which reads as dead for
+states literally named `bouncing` or `spawning`. `MOTION` gives every state its own body
+behaviour — bob, sway, pulse, orbital drift, jitter, tilt, squash, plus one-shot entrances
+and exits.
+
+It is all shape-agnostic, so an uploaded logo animates exactly like the built-in circle:
+
+- `bouncing` travels vertically and **squashes on landing**, pivoting on the ground rather
+  than the middle, so it lands instead of floating
+- `spawning` pops in from a dot with an overshoot; `powering-down` shrinks away and holds
+- `alerting` and `scared` jitter on two incommensurate waves, so they read as nervous
+  rather than metronomic
+- `idle` just breathes, ±1.4%
+
+The `motion` prop scales all of it (`0` holds the body still). It defaults to off when the
+viewer's OS asks for reduced motion.
+
 ## Limits
 
 - Clip regions come from *filled* shapes. Outline-only artwork (everything `fill="none"`)

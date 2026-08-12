@@ -6,6 +6,8 @@ interface Props {
   onAuto: () => void
   lookAround: number
   onLookAround: (v: number) => void
+  motion: number
+  onMotion: (v: number) => void
   clipping: number[]
   clearance: number
   total: number
@@ -17,6 +19,8 @@ export function FitPanel({
   onAuto,
   lookAround,
   onLookAround,
+  motion,
+  onMotion,
   clipping,
   clearance,
   total,
@@ -98,6 +102,24 @@ export function FitPanel({
       <p className="hint">
         How far the eyes drift from centre for expressive poses. At 0 the mascot always looks
         straight at you; higher values need a smaller face to stay inside the shape.
+      </p>
+
+      <label className="control">
+        <span>
+          body motion <output>{Math.round(motion * 100)}%</output>
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={1.5}
+          step={0.05}
+          value={motion}
+          onChange={e => onMotion(+e.target.value)}
+        />
+      </label>
+      <p className="hint">
+        How much the silhouette itself bounces, breathes, tilts and squashes. Each state has
+        its own motion; 0 holds the body perfectly still.
       </p>
 
       <button className="wide" onClick={onAuto}>

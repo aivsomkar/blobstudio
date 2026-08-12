@@ -16,13 +16,14 @@ export interface ExportOptions {
   gradient: [string, string, string]
   eyeColor: string
   lookAround: number
+  motion: number
 }
 
 const SHAPE_START = '/* __SHAPE_START__ */'
 const SHAPE_END = '/* __SHAPE_END__ */'
 
 export function generateComponent(options: ExportOptions): string {
-  const { componentName, shape, gradient, eyeColor, lookAround } = options
+  const { componentName, shape, gradient, eyeColor, lookAround, motion } = options
   const base = sanitizeName(componentName)
 
   let source = engineSource
@@ -43,6 +44,10 @@ export function generateComponent(options: ExportOptions): string {
   )
   source = source.replace(/eyeColor = '#ffffff'/, `eyeColor = ${JSON.stringify(eyeColor)}`)
   source = source.replace(/lookAround = 0\.35/g, `lookAround = ${lookAround}`)
+  source = source.replace(
+    /const motionStrength = motion \?\? \(prefersReducedMotion \? 0 : 1\)/,
+    `const motionStrength = motion ?? (prefersReducedMotion ? 0 : ${motion})`
+  )
 
   // 3. Rebrand.
   source = source.replace(/\bMascot/g, base).replace(/\bMASCOT_/g, upperSnake(base) + '_')
