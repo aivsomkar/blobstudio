@@ -1,0 +1,386 @@
+:root {
+  --page: #f1efe8;
+  --card: #fffdf7;
+  --ink: #171813;
+  --muted: #6e7067;
+  --border: #d9d5c9;
+  --accent: #1c7a4c;
+  --bad: #b4432a;
+  --radius: 14px;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #11130f;
+    --card: #1b1e18;
+    --ink: #f3f0e7;
+    --muted: #a5a89d;
+    --border: #363a30;
+    --accent: #4cc182;
+    --bad: #ff8b6b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.page {
+  margin: 0 auto;
+  max-width: 1240px;
+  padding: 32px 24px 72px;
+  display: grid;
+  gap: 26px;
+}
+
+.masthead h1 {
+  font-size: 34px;
+  letter-spacing: -0.025em;
+  margin: 0 0 6px;
+}
+
+.masthead p {
+  color: var(--muted);
+  margin: 0;
+  max-width: 62ch;
+}
+
+.banner {
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+
+.banner.error {
+  background: color-mix(in srgb, var(--bad) 14%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
+  color: var(--bad);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.stage,
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+
+.stage {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  position: sticky;
+  top: 20px;
+}
+
+.preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.preview svg {
+  width: 100%;
+  height: auto;
+}
+
+.busy {
+  position: absolute;
+  inset: auto 0 0;
+  text-align: center;
+  font: 12px ui-monospace, monospace;
+  color: var(--muted);
+}
+
+.stage-meta {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.stage-meta span {
+  color: var(--muted);
+  font: 12px ui-monospace, monospace;
+}
+
+.panels {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+
+button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--ink);
+  border-radius: 9px;
+  padding: 6px 11px;
+  font: 12px ui-monospace, monospace;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.clips {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.wide {
+  width: 100%;
+  justify-content: center;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.dropzone {
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 22px;
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dropzone:hover,
+.dropzone.over {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.dropzone span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dropzone.busy {
+  opacity: 0.5;
+}
+
+.control {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.control span {
+  display: flex;
+  justify-content: space-between;
+  font: 12px ui-monospace, monospace;
+  color: var(--muted);
+}
+
+.control input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.field span {
+  font: 12px ui-monospace, monospace;
+  color: var(--muted);
+}
+
+.field input {
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 7px 10px;
+  font: 13px ui-monospace, monospace;
+}
+
+.toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.toggle input {
+  accent-color: var(--accent);
+}
+
+.stops {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.stops label {
+  display: grid;
+  gap: 3px;
+  justify-items: center;
+  font: 10px ui-monospace, monospace;
+  color: var(--muted);
+}
+
+.stops input[type='color'] {
+  width: 42px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: none;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.verdict {
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 14px;
+  font: 12px ui-monospace, monospace;
+  display: grid;
+  gap: 2px;
+}
+
+.verdict.ok {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
+.verdict.bad {
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  color: var(--bad);
+}
+
+.verdict em {
+  font-style: normal;
+  opacity: 0.75;
+}
+
+.hint,
+.warning {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+.warning {
+  color: var(--bad);
+}
+
+.usage {
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: 11.5px/1.6 ui-monospace, monospace;
+  color: var(--muted);
+  overflow-x: auto;
+  margin: 0 0 12px;
+}
+
+.states {
+  display: grid;
+  gap: 22px;
+}
+
+.states .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 9px;
+}
+
+.cell {
+  display: grid;
+  gap: 2px;
+  padding: 7px;
+  background: var(--card);
+  border-radius: 12px;
+  font: 10.5px ui-monospace, monospace;
+  color: var(--muted);
+}
+
+.cell svg {
+  width: 100%;
+  height: auto;
+}
+
+.cell.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.cell figcaption {
+  text-align: center;
+}
+
+footer {
+  color: var(--muted);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
