@@ -20,6 +20,10 @@ npm run dev      # http://localhost:5173
 npm run build    # static files in dist/ — deploy anywhere
 ```
 
+`src/engine/faceEngine.tsx` is generated but committed, so `build` never regenerates it —
+a clean clone builds with nothing else present. Regeneration is a separate, manual step
+(see below) that needs the original lab.
+
 ## What happens to an upload
 
 1. **Sanitize.** This renders stranger-supplied markup inline, so `<script>`, `on*`
