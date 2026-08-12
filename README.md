@@ -122,6 +122,30 @@ mascot's `!` jitters too.
 
 `effects` and `glyphs` props turn each off. Both are baked into exports.
 
+## Downloading the library
+
+The component on its own only helps a React project. **Download library (.zip)** packages
+the mascot so it drops into anything:
+
+```
+<Name>Mascot/
+  <Name>Avatar.tsx        the animated component — React its only dependency
+  svg/states/*.svg        39 still frames, one per state
+  svg/expressions/*.svg   25 still frames, one per expression
+  svg/sprite.svg          every state as a <symbol>, for plain HTML
+  png/*.png               optional, 256/512/1024, for anywhere vectors won't go
+  manifest.json           states, groups, and which expression each rests on
+  README.md               usage for React and non-React alike
+```
+
+The still frames are generated from the same geometry the live component uses, not
+screenshotted: with no turn, gaze or blink the eye transform collapses to identity, so a
+frame is just its two eye rings plus the mouth derived from them. Every file is
+self-contained, so `<img src="svg/states/thinking.svg">` works with no other assets.
+
+The archive is written by a small store-only ZIP writer (`src/export/zip.ts`) rather than a
+zip dependency — it is about a hundred lines and keeps the project at zero runtime deps.
+
 ## Limits
 
 - Clip regions come from *filled* shapes. Outline-only artwork (everything `fill="none"`)

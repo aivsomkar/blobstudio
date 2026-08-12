@@ -343,6 +343,12 @@ button.wide {
   margin: 0 0 12px;
 }
 
+.panel hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0 12px;
+}
+
 .states {
   display: grid;
   gap: 22px;
