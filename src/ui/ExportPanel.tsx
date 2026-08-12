@@ -9,17 +9,38 @@ interface Props {
   eyeColor: string
   lookAround: number
   motion: number
+  effects: boolean
+  glyphs: boolean
 }
 
-export function ExportPanel({ defaultName, shape, gradient, eyeColor, lookAround, motion }: Props) {
+export function ExportPanel({
+  defaultName,
+  shape,
+  gradient,
+  eyeColor,
+  lookAround,
+  motion,
+  effects,
+  glyphs,
+}: Props) {
   const [raw, setRaw] = useState(defaultName)
   const [copied, setCopied] = useState(false)
   const base = sanitizeName(raw)
   const filename = `${base}Avatar.tsx`
 
   const source = useMemo(
-    () => generateComponent({ componentName: raw, shape, gradient, eyeColor, lookAround, motion }),
-    [raw, shape, gradient, eyeColor, lookAround, motion]
+    () =>
+      generateComponent({
+        componentName: raw,
+        shape,
+        gradient,
+        eyeColor,
+        lookAround,
+        motion,
+        effects,
+        glyphs,
+      }),
+    [raw, shape, gradient, eyeColor, lookAround, motion, effects, glyphs]
   )
 
   // Test seam: lets an automated run assert against the exact source a user would download.

@@ -27,6 +27,7 @@ if (!fs.existsSync(LAB)) {
 }
 
 const t = fs.readFileSync(LAB, 'utf8')
+const EFFECTS_PART = fs.readFileSync(path.resolve(__dirname, 'engine-effects.part.tsx'), 'utf8')
 
 function grab(name, endMark) {
   const i = t.indexOf(`const ${name} = `)
@@ -346,6 +347,8 @@ export const MOTION: Record<MascotState, BodyMotion> = {
 /** How long a \`settle\` takes to reach its resting scale. */
 const SETTLE_MS = 1400
 
+${EFFECTS_PART.trim()}
+
 /* ------------------------------------------------------------------ states */
 
 export type MascotState =
@@ -524,6 +527,10 @@ export interface MascotAvatarProps {
   mouthStroke?: number
   /** How strongly the body itself moves. 0 holds it perfectly still, 1 is full motion. */
   motion?: number
+  /** Confetti and motion ribbons. */
+  effects?: boolean
+  /** Let states like alerting replace the mascot with a symbol. */
+  glyphs?: boolean
   autoBlink?: boolean
   autoExpression?: boolean
   paused?: boolean
@@ -557,6 +564,8 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       showMouth = true,
       mouthStroke = MOUTH_STROKE,
       motion,
+      effects = true,
+      glyphs = true,
       autoBlink = true,
       autoExpression = true,
       paused = false,
@@ -575,6 +584,10 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
     const eye1 = useRef<SVGPathElement | null>(null)
     const mouth = useRef<SVGPathElement | null>(null)
     const bodyGroup = useRef<SVGGElement | null>(null)
+    const bodyContent = useRef<SVGGElement | null>(null)
+    const trailLayer = useRef<SVGGElement | null>(null)
+    const confettiLayer = useRef<SVGGElement | null>(null)
+    const glyphLayer = useRef<SVGGElement | null>(null)
 
     // Respect the OS setting unless the caller states a preference explicitly.
     const prefersReducedMotion = useMemo(
@@ -614,6 +627,8 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         paused,
         lookAround,
         motionStrength,
+        effects,
+        glyphs,
       },
     })
     engine.current.props = {
@@ -626,6 +641,8 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       paused,
       lookAround,
       motionStrength,
+      effects,
+      glyphs,
     }
 
     const selectExpression = (index: number) => {
@@ -778,6 +795,19 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
             else bodyEl.removeAttribute('transform')
           }
         }
+
+        updateEffects({
+          trails: trailLayer.current,
+          confetti: confettiLayer.current,
+          glyph: glyphLayer.current,
+          bodyContent: bodyContent.current,
+          state: p.state as MascotState,
+          elapsed: now - e.stateStart,
+          strength: p.motionStrength ?? 1,
+          paint: paintRef.current,
+          showEffects: p.effects !== false,
+          showGlyphs: p.glyphs !== false,
+        })
       }
 
       const step = (now: number) => {
@@ -810,6 +840,10 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       return () => cancelAnimationFrame(frame)
     }, [])
 
+    const paint = \`url(#\${uid}-grad)\`
+    const paintRef = useRef(paint)
+    paintRef.current = paint
+
     const dimension = typeof size === 'number' ? \`\${size}px\` : size
     const label = title === undefined ? \`\${shape.name} mascot\` : title
     const body = shape.body.replace(/\\{\\{GRADIENT\\}\\}/g, \`url(#\${uid}-grad)\`)
@@ -840,9 +874,13 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
           />
         </defs>
         <g transform={flip ? \`translate(\${FACE_BOX} 0) scale(-1 1)\` : undefined}>
+          {/* Ribbons sit behind the mascot, confetti in front of it. */}
+          <g ref={trailLayer} />
           {/* Body and face move together — the face is painted on the body, not floating
-              in front of it, so a squash or a tilt has to carry both. */}
+              in front of it, so a squash or a tilt has to carry both. The glyph rides the
+              same motion but is not faded with them, since it replaces them. */}
           <g ref={bodyGroup}>
+          <g ref={bodyContent}>
           <g transform={shape.fit || undefined} dangerouslySetInnerHTML={{ __html: body }} />
           <g clipPath={\`url(#\${uid}-clip)\`}>
             <g transform={anchorTransform(shape.anchor)}>
@@ -860,6 +898,9 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
             </g>
           </g>
           </g>
+          <g ref={glyphLayer} style={{ opacity: 0 }} />
+          </g>
+          <g ref={confettiLayer} />
         </g>
       </svg>
     )

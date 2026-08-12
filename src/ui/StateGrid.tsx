@@ -7,6 +7,8 @@ interface Props {
   showMouth: boolean
   lookAround: number
   motion: number
+  effects: boolean
+  glyphs: boolean
   active: MascotState
   onPick: (state: MascotState) => void
   groups: Record<string, MascotState[]>
@@ -20,6 +22,8 @@ export function StateGrid({
   showMouth,
   lookAround,
   motion,
+  effects,
+  glyphs,
   active,
   onPick,
   groups,
@@ -44,6 +48,8 @@ export function StateGrid({
                   showMouth={showMouth}
                   lookAround={lookAround}
                   motion={motion}
+                  effects={effects}
+                  glyphs={glyphs}
                   size="100%"
                   title={name}
                 />

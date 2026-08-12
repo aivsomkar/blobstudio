@@ -17,13 +17,15 @@ export interface ExportOptions {
   eyeColor: string
   lookAround: number
   motion: number
+  effects: boolean
+  glyphs: boolean
 }
 
 const SHAPE_START = '/* __SHAPE_START__ */'
 const SHAPE_END = '/* __SHAPE_END__ */'
 
 export function generateComponent(options: ExportOptions): string {
-  const { componentName, shape, gradient, eyeColor, lookAround, motion } = options
+  const { componentName, shape, gradient, eyeColor, lookAround, motion, effects, glyphs } = options
   const base = sanitizeName(componentName)
 
   let source = engineSource
@@ -48,6 +50,8 @@ export function generateComponent(options: ExportOptions): string {
     /const motionStrength = motion \?\? \(prefersReducedMotion \? 0 : 1\)/,
     `const motionStrength = motion ?? (prefersReducedMotion ? 0 : ${motion})`
   )
+  source = source.replace(/effects = true,/, `effects = ${effects},`)
+  source = source.replace(/glyphs = true,/, `glyphs = ${glyphs},`)
 
   // 3. Rebrand.
   source = source.replace(/\bMascot/g, base).replace(/\bMASCOT_/g, upperSnake(base) + '_')

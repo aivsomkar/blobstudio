@@ -37,6 +37,8 @@ export default function App() {
   const [gradient, setGradient] = useState<[string, string, string]>(DEFAULT_GRADIENT)
   const [eyeColor, setEyeColor] = useState('#ffffff')
   const [showMouth, setShowMouth] = useState(true)
+  const [effects, setEffects] = useState(true)
+  const [glyphs, setGlyphs] = useState(true)
   const [useGradient, setUseGradient] = useState(true)
   const avatar = useRef<MascotAvatarHandle>(null)
 
@@ -132,6 +134,8 @@ export default function App() {
                 expression={expression}
                 lookAround={lookAround}
                 motion={motion}
+                effects={effects}
+                glyphs={glyphs}
                 gradient={gradient}
                 eyeColor={eyeColor}
                 showMouth={showMouth}
@@ -155,6 +159,20 @@ export default function App() {
               onClick={() => setShowMouth(v => !v)}
             >
               Mouth
+            </button>
+            <button
+              className={effects ? 'on' : ''}
+              onClick={() => setEffects(v => !v)}
+              title="Confetti and motion ribbons"
+            >
+              Effects
+            </button>
+            <button
+              className={glyphs ? 'on' : ''}
+              onClick={() => setGlyphs(v => !v)}
+              title="Let alerting and confused replace the mascot with a symbol"
+            >
+              Glyphs
             </button>
           </div>
 
@@ -229,6 +247,8 @@ export default function App() {
               eyeColor={eyeColor}
               lookAround={lookAround}
               motion={motion}
+              effects={effects}
+              glyphs={glyphs}
             />
           )}
         </section>
@@ -242,6 +262,8 @@ export default function App() {
           showMouth={showMouth}
           lookAround={lookAround}
           motion={motion}
+          effects={effects}
+          glyphs={glyphs}
           active={state}
           onPick={s => {
             setState(s)

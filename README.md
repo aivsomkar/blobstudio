@@ -100,6 +100,28 @@ It is all shape-agnostic, so an uploaded logo animates exactly like the built-in
 The `motion` prop scales all of it (`0` holds the body still). It defaults to off when the
 viewer's OS asks for reduced motion.
 
+## Effects
+
+Three more layers, all shape-agnostic, all driven imperatively from the frame loop rather
+than React state — a celebrate burst is 16 elements changing every frame, and a page showing
+every state at once would otherwise re-render continuously.
+
+**Confetti** (`celebrate`, `excited`, `laughing`) launches from a ring at the body's rim
+rather than from its centre, so a burst frames the face instead of covering it. Travel is
+deliberately bounded: the viewBox carries only 15 units of margin, so a piece thrown much
+past ~130 from centre would be clipped mid-flight.
+
+**Ribbons** (`orbit`, `radar`, `progress`, `loading`, `uploading`, `sending`, `receiving`)
+sweep around the body on their own periods and directions, drawn *behind* it so they duck
+out of sight as they pass.
+
+**Glyphs** (`alerting`, `notifying`, `confused`) replace the mascot with a symbol — `!` or
+`?` — painted in the body's own gradient, scaling up as the body fades out so the swap reads
+as a transformation rather than a cut. The glyph rides the body's motion, so an alerting
+mascot's `!` jitters too.
+
+`effects` and `glyphs` props turn each off. Both are baked into exports.
+
 ## Limits
 
 - Clip regions come from *filled* shapes. Outline-only artwork (everything `fill="none"`)
