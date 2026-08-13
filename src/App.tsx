@@ -23,7 +23,6 @@ import { ExportPanel } from './ui/ExportPanel'
 import { ShapePanel } from './ui/ShapePanel'
 import { HeadPanel } from './ui/HeadPanel'
 import { ExpressionGrid } from './ui/ExpressionGrid'
-import { Gizmo, useOrbit, type Orientation } from './ui/Gizmo'
 import { MOUTH_STROKE } from './engine/faceEngine'
 
 export interface Mascot {
@@ -54,7 +53,6 @@ export default function App() {
   const [shapeParams, setShapeParams] = useState<Record<string, number>>(
     BUILTIN_SHAPES[0].defaults
   )
-  const [orientation, setOrientation] = useState<Orientation>({ x: 0, y: 0, z: 0 })
   const [linkedEyes, setLinkedEyes] = useState(true)
   const [eyes, setEyes] = useState<{ left: [number, number]; right: [number, number] }>({
     left: [1, 1],
@@ -141,8 +139,6 @@ export default function App() {
     return report(buildClouds(lookAround, undefined, gaze), mascot.sdf, mascot.anchor)
   }, [mascot, lookAround, gaze])
 
-  const orbit = useOrbit(orientation, setOrientation)
-
   const setAnchor = (next: Partial<Mascot['anchor']>) =>
     setMascot(m => (m ? { ...m, anchor: { ...m.anchor, ...next } } : m))
 
@@ -175,6 +171,20 @@ export default function App() {
             your browser; nothing is uploaded.
           </p>
         </div>
+        <nav className="masthead-links">
+          <a href="https://supamaus.com" target="_blank" rel="noopener noreferrer">
+            SupaMaus
+            <Outbound />
+          </a>
+          <a
+            href="https://github.com/milind-soni/OpenMausBot"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            OpenMausBot
+            <Outbound />
+          </a>
+        </nav>
       </header>
 
       {error && (
@@ -185,7 +195,7 @@ export default function App() {
 
       <div className="layout">
         <section className="stage">
-          <div className={'preview' + (dark ? ' dark' : '')} {...orbit}>
+          <div className={'preview' + (dark ? ' dark' : '')}>
             {shape && (
               <MascotAvatar
                 ref={avatar}
@@ -194,7 +204,6 @@ export default function App() {
                 expression={expression}
                 lookAround={lookAround}
                 gaze={gaze}
-                orientation={orientation}
                 eyeScale={eyes}
                 spring={spring}
                 motion={motion}
@@ -207,12 +216,8 @@ export default function App() {
                 title={`${mascot?.name} preview`}
               />
             )}
-            <Gizmo orientation={orientation} onChange={setOrientation} />
             {busy && <div className="busy">fitting…</div>}
           </div>
-          <p className="stage-hint">
-            Drag the stage to aim the head. The gizmo's rings turn one axis at a time.
-          </p>
 
           <div className="stage-meta">
             <strong>{state}</strong>
@@ -270,8 +275,6 @@ export default function App() {
           />
 
           <HeadPanel
-            orientation={orientation}
-            onOrientation={setOrientation}
             eyes={eyes}
             onEyes={setEyes}
             linked={linkedEyes}
@@ -370,6 +373,13 @@ export default function App() {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0')
+
+/** Marks a link as leaving the page, so the two in the masthead don't read as tabs. */
+const Outbound = () => (
+  <svg viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+    <path d="M2.5 7.5 7.5 2.5M3.6 2.5h3.9v3.9" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
 
 /**
  * Strips the artwork's own paint so the gradient shows through. Uploaded logos usually
