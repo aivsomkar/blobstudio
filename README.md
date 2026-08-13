@@ -157,26 +157,15 @@ mascot's `!` jitters too.
 
 `effects` and `glyphs` props turn each off. Both are baked into exports.
 
-## Facing
+## Turning the head
 
-`orientation` aims the head in three axes, in degrees — `y` turns, `x` nods, `z` rolls. The
-face travels around the implied sphere: eyes and mouth move across the surface and
-foreshorten as they near the limb, while the silhouette narrows by the cosine of each axis
-the way a flat shape turning away would. Without that second half the eyes slide across a
-body that never moves, which reads as a decal rather than a head. Past a quarter turn the
-silhouette mirrors, because that is its back.
+`turn` rotates the head in degrees. The eyes and mouth travel around the implied sphere,
+foreshortening as they approach the limb and disappearing once they pass it, which is what
+makes a spin read as a face on a ball rather than a face sliding sideways. `spin()` on the
+imperative handle runs a full revolution.
 
-A longitude that has gone round the back is brought to the equivalent point on the near
-side, so a turning head always has a face. A sphere painted on one hemisphere shows nothing
-for half a revolution, which is correct and useless — a mascot with no face is a bug in
-almost every situation it can find itself in. The handoff is invisible: both branches meet at
-the limb, where the silhouette has flattened to a sliver and the eye has foreshortened to
-nothing.
-
-Drag the stage to aim it, or the gizmo's three beaded hoops for one axis at a time.
-
-`eyeScale` takes a number for both eyes, or `{ left: [w, h], right: [w, h] }` to size each
-on its own. Which path is the left eye is decided by where it sits, not by which was authored
+`eyeScale` takes a number for both eyes, or `{ left: [w, h], right: [w, h] }` to size each on
+its own. Which path is the left eye is decided by where it sits, not by which was authored
 first.
 
 ## The panel

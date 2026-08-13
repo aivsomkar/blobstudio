@@ -1767,21 +1767,6 @@ function resolveEyeScale(
   return ringCentre(rings[0])[0] <= ringCentre(rings[1])[0] ? [left, right] : [right, left]
 }
 
-/**
- * Brings a longitude that has gone round the back to the equivalent point on the near side.
- *
- * A sphere with a face painted on one hemisphere shows nothing for half a revolution, which
- * is correct and useless: a mascot with no face is a bug in almost every situation it can
- * find itself in. Treating the far side as carrying the same face means a turn always has
- * something to look at, and the handoff is invisible — both branches meet at the limb, where
- * the silhouette has flattened to a sliver and the eye has foreshortened to nothing.
- */
-const wrapFace = (angle: number) =>
-  Math.cos(angle) > 0 ? angle : angle + Math.PI
-
-/** Keeps a foreshortening factor off exactly zero without throwing away its sign. */
-const flatten = (v: number) => (Math.abs(v) < 0.02 ? (v < 0 ? -0.02 : 0.02) : v)
-
 /** Face-space transform placing the face inside a silhouette. */
 export const anchorTransform = (a: { x: number; y: number; scale: number }) =>
   `translate(${a.x} ${a.y}) scale(${a.scale}) translate(${-FACE_CENTRE[0]} ${-FACE_CENTRE[1]})`
@@ -1887,21 +1872,9 @@ export interface MascotAvatarProps {
   /** Eye offset, each axis -1…1. */
   gaze?: { x?: number; y?: number }
   /**
-   * Head turn in degrees about the vertical axis. Sugar for `orientation.y`, kept because
-   * it predates it and because `spin()` drives it.
+   * Head turn in degrees; the eyes wrap around the implied sphere.
    */
   turn?: number
-  /**
-   * Which way the head is facing, in degrees.
-   *
-   *   y  turns left/right — the eyes travel around the sphere's longitude
-   *   x  nods up/down — the same, around its latitude
-   *   z  rolls the whole head in the picture plane
-   *
-   * The silhouette foreshortens with x and y as a flat surface would, which is what keeps
-   * a turned head from reading as a face sliding across a stationary body.
-   */
-  orientation?: { x?: number; y?: number; z?: number }
   /** How much of each expression's own look-direction to apply. 0 = always forward. */
   lookAround?: number
   flip?: boolean
@@ -1946,7 +1919,6 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       size = 160,
       gaze = DEFAULT_GAZE,
       turn = 0,
-      orientation,
       lookAround = 0.35,
       flip = false,
       spring = 7,
@@ -1973,7 +1945,6 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
     const eye0 = useRef<SVGPathElement | null>(null)
     const eye1 = useRef<SVGPathElement | null>(null)
     const mouth = useRef<SVGPathElement | null>(null)
-    const orientGroup = useRef<SVGGElement | null>(null)
     const bodyGroup = useRef<SVGGElement | null>(null)
     const bodyContent = useRef<SVGGElement | null>(null)
     const trailLayer = useRef<SVGGElement | null>(null)
@@ -2012,13 +1983,11 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       stateStart: 0,
       lastState: state as MascotState,
       lastBodyTransform: '',
-      lastOrientTransform: '',
       props: {
         state,
         expression,
         gaze,
         turn,
-        orientation,
         spring,
         eyeScale,
         paused,
@@ -2033,7 +2002,6 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       expression,
       gaze,
       turn,
-      orientation,
       spring,
       eyeScale,
       paused,
@@ -2127,9 +2095,7 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         )
         const gx = clamp(p.gaze?.x ?? 0, -1, 1) * GAZE_X
         const gy = clamp(p.gaze?.y ?? 0, -1, 1) * GAZE_Y
-        // `turn` and `spin()` both feed the vertical axis, so they stack.
-        const yaw = (((p.turn ?? 0) + spinTurn + (p.orientation?.y ?? 0)) * Math.PI) / 180
-        const pitch = ((p.orientation?.x ?? 0) * Math.PI) / 180
+        const radians = (((p.turn ?? 0) + spinTurn) * Math.PI) / 180
         const eyeSize = resolveEyeScale(p.eyeScale, rings)
         const blink = blinkScale(e, now)
 
@@ -2137,31 +2103,23 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
           const el = index === 0 ? eye0.current : eye1.current
           if (!el) return
           const c = ringCentre(ring)
-          // Where this eye sits on the sphere, before the head is turned anywhere.
           const baseLongitude = Math.asin(clamp((c[0] - SPHERE_C) / SPHERE_R, -1, 1))
-          const baseLatitude = Math.asin(clamp((c[1] - SPHERE_C) / SPHERE_R, -1, 1))
-          const longitude = wrapFace(baseLongitude + yaw)
-          const latitude = wrapFace(baseLatitude + pitch)
-          // Depth is how far round the sphere the eye now is on each axis; the eye
-          // foreshortens on one and travels on both.
-          const depthX = Math.cos(longitude)
-          const depthY = Math.cos(latitude)
-          const shrinkX = Math.max(depthX, 0.02) / Math.max(Math.cos(baseLongitude), 0.02)
-          const shrinkY = Math.max(depthY, 0.02) / Math.max(Math.cos(baseLatitude), 0.02)
+          const longitude = baseLongitude + radians
+          const depth = Math.cos(longitude)
+          const perspective = Math.max(depth, 0.02) / Math.max(Math.cos(baseLongitude), 0.02)
           const size = eyeSize[index]
           el.setAttribute('d', toPath(ring))
           el.setAttribute(
             'transform',
             `translate(${(SPHERE_C + SPHERE_R * Math.sin(longitude) + gx).toFixed(2)} ${(
-              SPHERE_C + SPHERE_R * Math.sin(latitude) + gy
-            ).toFixed(2)}) scale(${clamp(shrinkX * size[0], 0.02, 2.4).toFixed(4)} ${clamp(
-              shrinkY * blink * size[1],
+              c[1] + gy
+            ).toFixed(2)}) scale(${clamp(perspective * size[0], 0.02, 2.4).toFixed(4)} ${clamp(
+              blink * size[1],
               0.02,
               2.4
             ).toFixed(4)}) translate(${(-c[0]).toFixed(2)} ${(-c[1]).toFixed(2)})`
           )
-          // Past the horizon on either axis it has gone round the back of the head.
-          el.style.opacity = depthX > 0.02 && depthY > 0.02 ? '1' : '0'
+          el.style.opacity = depth > 0.02 ? '1' : '0'
         })
 
         // Mouth: same sphere projection as the eyes, but blinking never touches it.
@@ -2170,57 +2128,19 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
           const spec = displayedMouth(e)
           const frameGeom = mouthFrame(rings, spec)
           const baseLongitude = Math.asin(clamp((frameGeom.x - SPHERE_C) / SPHERE_R, -1, 1))
-          const baseLatitude = Math.asin(clamp((frameGeom.y - SPHERE_C) / SPHERE_R, -1, 1))
-          const longitude = wrapFace(baseLongitude + yaw)
-          const latitude = wrapFace(baseLatitude + pitch)
-          const depthX = Math.cos(longitude)
-          const depthY = Math.cos(latitude)
-          const shrinkX = Math.max(depthX, 0.02) / Math.max(Math.cos(baseLongitude), 0.02)
-          const shrinkY = Math.max(depthY, 0.02) / Math.max(Math.cos(baseLatitude), 0.02)
+          const longitude = baseLongitude + radians
+          const depth = Math.cos(longitude)
+          const perspective = Math.max(depth, 0.02) / Math.max(Math.cos(baseLongitude), 0.02)
           mouthEl.setAttribute('d', mouthPath(frameGeom, spec))
           mouthEl.setAttribute(
             'transform',
             `translate(${(SPHERE_C + SPHERE_R * Math.sin(longitude) + gx).toFixed(2)} ${(
-              SPHERE_C + SPHERE_R * Math.sin(latitude) + gy
-            ).toFixed(2)}) scale(${clamp(shrinkX, 0.02, 2.4).toFixed(4)} ${clamp(
-              shrinkY,
-              0.02,
-              2.4
-            ).toFixed(4)}) translate(${(-frameGeom.x).toFixed(2)} ${(-frameGeom.y).toFixed(2)})`
+              frameGeom.y + gy
+            ).toFixed(2)}) scale(${clamp(perspective, 0.02, 2.4).toFixed(4)} 1) translate(${(
+              -frameGeom.x
+            ).toFixed(2)} ${(-frameGeom.y).toFixed(2)})`
           )
-          mouthEl.style.opacity = depthX > 0.02 && depthY > 0.02 ? '1' : '0'
-        }
-
-        /*
-          The silhouette foreshortens with the head.
-
-          The face travels around a sphere; the body is a flat shape, so it gets the flat
-          equivalent — narrowed by the cosine of each axis. Without it the eyes slide across
-          a silhouette that never moves, which reads as a decal rather than a head. Roll is
-          the one axis a flat shape can do honestly, so it rotates everything together.
-        */
-        const orientEl = orientGroup.current
-        if (orientEl) {
-          const roll = p.orientation?.z ?? 0
-          // Signed, not absolute: past a quarter turn a flat shape is showing you its back,
-          // and a negative scale is what mirrors it. Taking the absolute value instead
-          // leaves an asymmetric silhouette pointing the same way from behind, which reads
-          // as the face having vanished rather than as the head having turned around.
-          const sx = flatten(Math.cos(yaw))
-          const sy = flatten(Math.cos(pitch))
-          const parts: string[] = []
-          if (roll) parts.push(`rotate(${roll.toFixed(2)} ${SPHERE_C} ${SPHERE_C})`)
-          if (sx !== 1 || sy !== 1) {
-            parts.push(
-              `translate(${SPHERE_C} ${SPHERE_C}) scale(${sx.toFixed(4)} ${sy.toFixed(4)}) translate(${-SPHERE_C} ${-SPHERE_C})`
-            )
-          }
-          const orient = parts.join(' ')
-          if (orient !== e.lastOrientTransform) {
-            e.lastOrientTransform = orient
-            if (orient) orientEl.setAttribute('transform', orient)
-            else orientEl.removeAttribute('transform')
-          }
+          mouthEl.style.opacity = depth > 0.02 ? '1' : '0'
         }
 
         // The body. One-shot entrances need time since the state began, so track that here
@@ -2338,9 +2258,6 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
           {/* Body and face move together — the face is painted on the body, not floating
               in front of it, so a squash or a tilt has to carry both. The glyph rides the
               same motion but is not faded with them, since it replaces them. */}
-          {/* Orientation wraps the head alone. The comets orbit it rather than belong to
-              it, so they keep their own space. */}
-          <g ref={orientGroup}>
           <g ref={bodyGroup}>
           <g ref={bodyContent}>
           <g transform={shape.fit || undefined} dangerouslySetInnerHTML={{ __html: body }} />
@@ -2361,7 +2278,6 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
           </g>
           </g>
           <g ref={glyphLayer} style={{ opacity: 0 }} />
-          </g>
           </g>
           {/* The near half of the orbits, and the tails a dashing dot drags through. */}
           <g ref={trailFrontLayer} />

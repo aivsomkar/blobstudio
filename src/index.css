@@ -461,50 +461,6 @@ footer {
     radial-gradient(circle at 50% 42%, #23262b 0%, #101216 62%, #0a0b0d 100%);
   border-radius: var(--radius);
   border: 1px solid var(--border);
-  cursor: grab;
-  touch-action: none;
-}
-
-.preview.dark:active {
-  cursor: grabbing;
-}
-
-.stage-hint {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
-}
-
-/* Beats `.preview svg { width: 100% }` on specificity — the mascot fills the stage, the
-   gizmo is a widget on top of it. */
-.preview .gizmo {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 92px;
-  height: 92px;
-  overflow: visible;
-}
-
-.gizmo-shell {
-  fill: none;
-  stroke: color-mix(in srgb, var(--muted) 45%, transparent);
-  stroke-width: 1;
-}
-
-.gizmo ellipse {
-  fill: none;
-  stroke-width: 2;
-  cursor: ew-resize;
-  /* A hairline is hard to grab; the transparent stroke widens the hit area without
-     widening the drawing. */
-  paint-order: stroke;
-  vector-effect: non-scaling-stroke;
-}
-
-.gizmo ellipse:hover {
-  stroke-width: 3.5;
 }
 
 /* ------------------------------------------------------------------ scrub */
@@ -730,4 +686,55 @@ button.mini {
 
 .thumb.auto.on {
   color: var(--ink);
+}
+
+/* --------------------------------------------------------------- masthead */
+
+.masthead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.masthead-links {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Matched to the button rule rather than sharing it: these leave the page, and a control
+   that navigates away should not be a <button>. */
+.masthead-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 7px 12px;
+  font: 12px ui-monospace, monospace;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.masthead-links a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.masthead-links svg {
+  width: 10px;
+  height: 10px;
+  opacity: 0.55;
+}
+
+button.mini:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button.mini:disabled:hover {
+  border-color: var(--border);
 }
