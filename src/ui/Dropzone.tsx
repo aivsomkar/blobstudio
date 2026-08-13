@@ -1,13 +1,12 @@
 import { useRef, useState } from 'react'
-import { BUILTIN_SHAPES } from '../shapes/builtin'
 
 interface Props {
   onFile: (file: File) => void
-  onBuiltin: (id: string) => void
   busy: boolean
 }
 
-export function Dropzone({ onFile, onBuiltin, busy }: Props) {
+/** Upload only — picking a starting shape belongs to the shape panel, next to its knobs. */
+export function Dropzone({ onFile, busy }: Props) {
   const [over, setOver] = useState(false)
   const input = useRef<HTMLInputElement>(null)
 
@@ -18,7 +17,7 @@ export function Dropzone({ onFile, onBuiltin, busy }: Props) {
 
   return (
     <div className="panel">
-      <h2>Shape</h2>
+      <h2>Your artwork</h2>
       <div
         className={'dropzone' + (over ? ' over' : '') + (busy ? ' busy' : '')}
         onDragOver={e => {
@@ -50,13 +49,6 @@ export function Dropzone({ onFile, onBuiltin, busy }: Props) {
             e.target.value = ''
           }}
         />
-      </div>
-      <div className="chips">
-        {BUILTIN_SHAPES.map(s => (
-          <button key={s.id} onClick={() => onBuiltin(s.id)}>
-            {s.name}
-          </button>
-        ))}
       </div>
     </div>
   )

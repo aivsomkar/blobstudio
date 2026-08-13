@@ -1,6 +1,6 @@
 # Blob Studio
 
-Drop in an SVG. It gets eyes, a mouth, 25 expressions and 39 moods — then leaves as a React
+Drop in an SVG. It gets eyes, a mouth, 25 expressions and 40 moods — then leaves as a React
 component. Everything runs in the browser; nothing is uploaded anywhere.
 
 The output is one self-contained `.tsx` file with React as its only dependency:
@@ -47,8 +47,8 @@ src/svg/import.ts           parse, sanitize, namespace, measure
 src/fit/sdf.ts              rasterise → signed distance field
 src/fit/solve.ts            anchor/scale search + clipping report
 src/export/generate.ts      assemble the downloadable .tsx
-src/shapes/builtin.ts       circle, squircle, blob, hex, star, drop
-src/ui/                     dropzone, fit, colour, state grid, export
+src/shapes/builtin.ts       nine parametric starting shapes
+src/ui/                     dropzone, shape, head, fit, colour, expressions, states, export
 scripts/gen-engine.cjs      regenerates the engine from the GrokBot lab
 ```
 
@@ -125,9 +125,30 @@ rather than from its centre, so a burst frames the face instead of covering it. 
 deliberately bounded: the viewBox carries only 15 units of margin, so a piece thrown much
 past ~130 from centre would be clipped mid-flight.
 
-**Ribbons** (`orbit`, `radar`, `progress`, `loading`, `uploading`, `sending`, `receiving`)
-sweep around the body on their own periods and directions, drawn *behind* it so they duck
-out of sight as they pass.
+**Comets** (`orbit`, `radar`, `progress`, `loading`, `uploading`) circle the body on rings
+that are tipped and rolled in 3D. Each is a filled outline rather than a stroke, because SVG
+cannot taper a stroke and taper is most of what separates a comet from a hoop: a round head
+thinning to a tail, with a gradient running its length. Every ring is cut at the horizon, so
+a comet passes behind the mascot and comes back out in front — the near half draws over the
+body, the far half under it. These states also sit the body back to about three quarters
+size, which is what gives the rings room to clear the silhouette instead of scribbling
+across its face.
+
+**Comet dash** (`sending`, `receiving`) balls the mascot up into a dot and throws it along a
+figure-eight with three tails strung out behind, mirrored between the two.
+
+**Thinking dots** (`thinking-dots`) breaks the body apart into the three-dot loading
+indicator every chat app has. The dots are not a separate picture that replaces the mascot —
+the body shrinks toward the middle one while the outer two slide out from behind it, so what
+you read is one thing dividing. The body runs on a shorter clock than the row, so it has
+gone by the time the outer dots are still travelling. Run the state's clock back down to
+zero and it plays in reverse: the row gathers and the body reforms.
+
+**Pops** (`spawning`, `powering-down`) shed a few small copies of the body as it collapses to
+a point or springs out of one.
+
+**Badge** (`notifying`) lands an unread dot on the mascot's shoulder — it keeps its face,
+because it is telling you about something rather than becoming it.
 
 **Glyphs** (`alerting`, `notifying`, `confused`) replace the mascot with a symbol — `!` or
 `?` — painted in the body's own gradient, scaling up as the body fades out so the swap reads
@@ -135,6 +156,41 @@ as a transformation rather than a cut. The glyph rides the body's motion, so an 
 mascot's `!` jitters too.
 
 `effects` and `glyphs` props turn each off. Both are baked into exports.
+
+## Facing
+
+`orientation` aims the head in three axes, in degrees — `y` turns, `x` nods, `z` rolls. The
+face travels around the implied sphere: eyes and mouth move across the surface and
+foreshorten as they near the limb, while the silhouette narrows by the cosine of each axis
+the way a flat shape turning away would. Without that second half the eyes slide across a
+body that never moves, which reads as a decal rather than a head. Past a quarter turn the
+silhouette mirrors, because that is its back.
+
+A longitude that has gone round the back is brought to the equivalent point on the near
+side, so a turning head always has a face. A sphere painted on one hemisphere shows nothing
+for half a revolution, which is correct and useless — a mascot with no face is a bug in
+almost every situation it can find itself in. The handoff is invisible: both branches meet at
+the limb, where the silhouette has flattened to a sliver and the eye has foreshortened to
+nothing.
+
+Drag the stage to aim it, or the gizmo's three beaded hoops for one axis at a time.
+
+`eyeScale` takes a number for both eyes, or `{ left: [w, h], right: [w, h] }` to size each
+on its own. Which path is the left eye is decided by where it sits, not by which was authored
+first.
+
+## The panel
+
+- **Shape** — nine generated starting shapes, each with its own parameters, because the
+  meaningful knobs differ: a cone has a tip and a base to round, a polygon has sides and
+  corners, a circle has neither. Changing one re-imports and re-solves, debounced; the
+  solver finishes inside a frame.
+- **Scrubbable numbers** — drag a label to change its value, shift for fine, arrows to
+  nudge, or type. A slider spends its width encoding a range, which a panel of a dozen
+  values cannot afford.
+- **Expressions** — all 25 as rendered faces rather than numbered chips, drawn from the live
+  shape and colours so they stay honest, with any that clip ringed in red.
+- **Dark stage** — a mascot reads differently on light and dark, and both ship.
 
 ## Downloading the library
 
@@ -144,7 +200,7 @@ the mascot so it drops into anything:
 ```
 <Name>Mascot/
   <Name>Avatar.tsx        the animated component — React its only dependency
-  svg/states/*.svg        39 still frames, one per state
+  svg/states/*.svg        40 still frames, one per state
   svg/expressions/*.svg   25 still frames, one per expression
   svg/sprite.svg          every state as a <symbol>, for plain HTML
   png/*.png               optional, 256/512/1024, for anywhere vectors won't go
@@ -179,5 +235,6 @@ GrokBot reverse-engineering prototype:
 That gist carries no explicit licence, so treat the expression data as the author's work.
 
 Added on top of it here: the mouth system, the gaze/shape split that makes a resting mascot
-look forward, the distance-field fitting solver, the SVG importer and sanitizer, and the
-component exporter.
+look forward, the distance-field fitting solver, the SVG importer and sanitizer, the
+component exporter, three-axis head orientation, the comet and thinking-dots effects, and
+the parametric starting shapes.
