@@ -9,7 +9,7 @@ interface Props {
 
 /** A few ready-made ramps, so nobody has to fight three colour pickers to get started. */
 const PRESETS: { name: string; stops: [string, string, string] }[] = [
-  { name: 'Moss', stops: ['#9FE6B5', '#3FAE6E', '#1C7A4C'] },
+  { name: 'Moss', stops: ['#3FB180', '#009A5A', '#00683B'] },
   { name: 'Ocean', stops: ['#A5D8FF', '#3B82F6', '#1E3A8A'] },
   { name: 'Ember', stops: ['#FFD8A8', '#F97316', '#9A3412'] },
   { name: 'Grape', stops: ['#E9D5FF', '#A855F7', '#581C87'] },

@@ -5,6 +5,7 @@ import {
   STATE_GROUPS,
   EXPRESSION_COUNT,
   DEFAULT_GRADIENT,
+  POOLS,
   type MascotAvatarHandle,
   type MascotShape,
   type MascotState,
@@ -12,13 +13,18 @@ import {
 import { importSvg, SvgImportError, type ImportedShape } from './svg/import'
 import { buildSdf, type Sdf } from './fit/sdf'
 import { buildClouds, report, solveFit } from './fit/solve'
-import { BUILTIN_SHAPES, builtinToSvg } from './shapes/builtin'
+import { BUILTIN_SHAPES, builtinToSvg, type BuiltinShape } from './shapes/builtin'
 import { Dropzone } from './ui/Dropzone'
 import { GazePad, type Aim } from './ui/GazePad'
 import { FitPanel } from './ui/FitPanel'
 import { ColorPanel } from './ui/ColorPanel'
 import { StateGrid } from './ui/StateGrid'
 import { ExportPanel } from './ui/ExportPanel'
+import { ShapePanel } from './ui/ShapePanel'
+import { HeadPanel } from './ui/HeadPanel'
+import { ExpressionGrid } from './ui/ExpressionGrid'
+import { Gizmo, useOrbit, type Orientation } from './ui/Gizmo'
+import { MOUTH_STROKE } from './engine/faceEngine'
 
 export interface Mascot {
   name: string
@@ -43,6 +49,19 @@ export default function App() {
   const [effects, setEffects] = useState(true)
   const [glyphs, setGlyphs] = useState(true)
   const [useGradient, setUseGradient] = useState(true)
+  // Null once an upload is in play: parameters only mean something for generated shapes.
+  const [shapeId, setShapeId] = useState<string | null>(BUILTIN_SHAPES[0].id)
+  const [shapeParams, setShapeParams] = useState<Record<string, number>>(
+    BUILTIN_SHAPES[0].defaults
+  )
+  const [orientation, setOrientation] = useState<Orientation>({ x: 0, y: 0, z: 0 })
+  const [linkedEyes, setLinkedEyes] = useState(true)
+  const [eyes, setEyes] = useState<{ left: [number, number]; right: [number, number] }>({
+    left: [1, 1],
+    right: [1, 1],
+  })
+  const [spring, setSpring] = useState(7)
+  const [dark, setDark] = useState(true)
   const avatar = useRef<MascotAvatarHandle>(null)
   const gazeRef = useRef(gaze)
   gazeRef.current = gaze
@@ -76,9 +95,33 @@ export default function App() {
   // Open on the circle, so the page is alive before anyone uploads anything.
   useEffect(() => {
     const circle = BUILTIN_SHAPES[0]
-    void load(builtinToSvg(circle), circle.name)
+    void load(builtinToSvg(circle, circle.defaults), circle.name)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const pickShape = (shape: BuiltinShape) => {
+    setShapeId(shape.id)
+    setShapeParams(shape.defaults)
+    void load(builtinToSvg(shape, shape.defaults), shape.name)
+  }
+
+  /*
+    Every parameter change re-imports and re-solves. That sounds heavy and isn't: the solver
+    runs on a 256² distance field and finishes inside a frame, so dragging a width reads as
+    the shape moving rather than as a rebuild. Debounced anyway so a fast drag does not
+    queue a rasterise per pixel.
+  */
+  const paramTimer = useRef<number | null>(null)
+  const setParam = (key: string, value: number) => {
+    const shape = BUILTIN_SHAPES.find(b => b.id === shapeId)
+    if (!shape) return
+    const next = { ...shapeParams, [key]: value }
+    setShapeParams(next)
+    if (paramTimer.current !== null) window.clearTimeout(paramTimer.current)
+    paramTimer.current = window.setTimeout(() => {
+      void load(builtinToSvg(shape, next), shape.name)
+    }, 90)
+  }
 
   const shape: MascotShape | null = useMemo(() => {
     if (!mascot) return null
@@ -98,6 +141,8 @@ export default function App() {
     return report(buildClouds(lookAround, undefined, gaze), mascot.sdf, mascot.anchor)
   }, [mascot, lookAround, gaze])
 
+  const orbit = useOrbit(orientation, setOrientation)
+
   const setAnchor = (next: Partial<Mascot['anchor']>) =>
     setMascot(m => (m ? { ...m, anchor: { ...m.anchor, ...next } } : m))
 
@@ -108,7 +153,15 @@ export default function App() {
 
   const onUpload = async (file: File) => {
     const text = await file.text()
+    setShapeId(null)
     await load(text, file.name.replace(/\.svg$/i, '') || 'Mascot', true)
+  }
+
+  /** Jump to a random face from this state's own pool, the way the engine would. */
+  const randomExpression = () => {
+    const pool = POOLS[state]
+    const options = pool.filter(i => i !== expression)
+    setExpression((options.length ? options : pool)[Math.floor(Math.random() * (options.length || pool.length))])
   }
 
   return (
@@ -132,7 +185,7 @@ export default function App() {
 
       <div className="layout">
         <section className="stage">
-          <div className="preview">
+          <div className={'preview' + (dark ? ' dark' : '')} {...orbit}>
             {shape && (
               <MascotAvatar
                 ref={avatar}
@@ -141,6 +194,9 @@ export default function App() {
                 expression={expression}
                 lookAround={lookAround}
                 gaze={gaze}
+                orientation={orientation}
+                eyeScale={eyes}
+                spring={spring}
                 motion={motion}
                 effects={effects}
                 glyphs={glyphs}
@@ -151,8 +207,12 @@ export default function App() {
                 title={`${mascot?.name} preview`}
               />
             )}
+            <Gizmo orientation={orientation} onChange={setOrientation} />
             {busy && <div className="busy">fitting…</div>}
           </div>
+          <p className="stage-hint">
+            Drag the stage to aim the head. The gizmo's rings turn one axis at a time.
+          </p>
 
           <div className="stage-meta">
             <strong>{state}</strong>
@@ -182,6 +242,13 @@ export default function App() {
             >
               Glyphs
             </button>
+            <button
+              className={dark ? 'on' : ''}
+              onClick={() => setDark(v => !v)}
+              title="Dark stage — a mascot reads differently on each, and both ship"
+            >
+              Dark
+            </button>
           </div>
 
           {mascot?.imported.warnings.map(w => (
@@ -192,10 +259,24 @@ export default function App() {
         </section>
 
         <section className="panels">
-          <Dropzone onFile={onUpload} onBuiltin={id => {
-            const s = BUILTIN_SHAPES.find(b => b.id === id)!
-            void load(builtinToSvg(s), s.name)
-          }} busy={busy} />
+          <Dropzone onFile={onUpload} busy={busy} />
+
+          <ShapePanel
+            shapeId={shapeId}
+            params={shapeParams}
+            onPick={pickShape}
+            onParam={setParam}
+            busy={busy}
+          />
+
+          <HeadPanel
+            orientation={orientation}
+            onOrientation={setOrientation}
+            eyes={eyes}
+            onEyes={setEyes}
+            linked={linkedEyes}
+            onLinked={setLinkedEyes}
+          />
 
           {mascot && (
             <FitPanel
@@ -223,30 +304,23 @@ export default function App() {
             onUseGradient={setUseGradient}
           />
 
-          <div className="panel">
-            <h2>Expression</h2>
-            <div className="chips">
-              <button
-                className={expression === undefined ? 'on' : ''}
-                onClick={() => setExpression(undefined)}
-              >
-                auto
-              </button>
-              {Array.from({ length: EXPRESSION_COUNT }, (_, i) => (
-                <button
-                  key={i}
-                  className={
-                    (expression === i ? 'on ' : '') +
-                    (fitReport?.clipping.includes(i) ? 'clips' : '')
-                  }
-                  title={fitReport?.clipping.includes(i) ? 'Clips at this size' : undefined}
-                  onClick={() => setExpression(i)}
-                >
-                  {pad(i)}
-                </button>
-              ))}
-            </div>
-          </div>
+          {shape && (
+            <ExpressionGrid
+              shape={shape}
+              gradient={gradient}
+              eyeColor={eyeColor}
+              showMouth={showMouth}
+              lookAround={lookAround}
+              mouthStroke={MOUTH_STROKE}
+              expression={expression}
+              onExpression={setExpression}
+              clipping={fitReport?.clipping ?? []}
+              spring={spring}
+              onSpring={setSpring}
+              onBlink={() => avatar.current?.blink()}
+              onRandom={randomExpression}
+            />
+          )}
 
           {shape && (
             <ExportPanel
