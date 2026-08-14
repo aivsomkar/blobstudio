@@ -25,9 +25,6 @@ jobs:
       # actually produced the engine lives. It runs as part of `npm run check`.
       - run: npm ci
 
-      - name: Engine is current
-        run: npm run gen:engine:check
-
       - run: npm run lint
 
       - run: npm test
