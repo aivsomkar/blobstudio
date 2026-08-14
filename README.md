@@ -61,9 +61,15 @@ scripts/engine-sequence.part.tsx custom-state playback
 ```
 
 `npm run gen:engine:check` regenerates into memory and compares against the committed
-engine without writing. It runs first in `npm run check` and in CI, because a stale engine
-is otherwise silent: the preview and the export both come from it, so they agree with each
+engine without writing. It runs first in `npm run check`, because a stale engine is
+otherwise silent: the preview and the export both come from it, so they agree with each
 other while disagreeing with the lab they claim to be generated from.
+
+It is a **local** check only, and CI deliberately skips it. The working copy of the lab
+carries edits that are not in the published gist, so a fresh clone does not reproduce the
+committed engine — meaning the true source of the engine currently exists on one machine.
+Worth keeping a backup of `../gist/index.html`, or pushing those edits to the gist, before
+that matters.
 
 ## What is kept
 

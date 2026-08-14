@@ -34,7 +34,23 @@ const SEQUENCE_PART = part('engine-sequence.part.tsx')
 
 function grab(name, endMark) {
   const i = t.indexOf(`const ${name} = `)
-  if (i < 0) throw new Error('missing ' + name)
+  /*
+    A file exists at LAB but does not contain what the generator reads. Almost always this
+    is the wrong lab rather than a corrupt one — a fresh clone of the published gist, say,
+    when the engine was generated from a locally modified copy. Saying so beats throwing
+    `missing MOUTHS` at someone who has never opened this file.
+  */
+  if (i < 0) {
+    throw new Error(
+      [
+        `The lab at ${path.relative(process.cwd(), LAB)} has no \`const ${name}\`.`,
+        '',
+        'That file is not the lab this engine was generated from. If you cloned the',
+        'published gist, note that the committed engine may come from a locally edited',
+        'copy, which the gist does not have.',
+      ].join('\n')
+    )
+  }
   const j = t.indexOf(endMark, i)
   return eval('(' + t.slice(i + `const ${name} = `.length, j + endMark.length) + ')')
 }

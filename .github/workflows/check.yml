@@ -16,20 +16,13 @@ jobs:
           node-version: 22
           cache: npm
 
-      # The engine is generated from the GrokBot lab and committed, so the app builds
-      # without it. The freshness check does need it: it regenerates into memory and
-      # compares, which is the only thing that notices when the lab moves on and the
-      # committed engine does not.
+      # No engine-freshness check here, deliberately.
       #
-      # The generator looks for the lab one level above the repo, which is where it lives
-      # in local checkouts too — the gist is someone else's repository and is not vendored
-      # here.
-      - name: Fetch the GrokBot lab
-        run: |
-          if [ ! -f ../gist/index.html ]; then
-            git clone --depth 1 https://gist.github.com/49a4c9303de70118a90dc43badc1aba5.git ../gist
-          fi
-
+      # The engine is generated from the GrokBot lab, and the working copy of that lab
+      # carries local edits that are not in the published gist. Cloning the gist therefore
+      # does not reproduce the committed engine, and a check that cannot pass is worse than
+      # no check — so `npm run gen:engine:check` stays a local step, where the lab that
+      # actually produced the engine lives. It runs as part of `npm run check`.
       - run: npm ci
 
       - name: Engine is current
