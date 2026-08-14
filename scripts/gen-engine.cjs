@@ -27,7 +27,10 @@ if (!fs.existsSync(LAB)) {
 }
 
 const t = fs.readFileSync(LAB, 'utf8')
-const EFFECTS_PART = fs.readFileSync(path.resolve(__dirname, 'engine-effects.part.tsx'), 'utf8')
+const part = name => fs.readFileSync(path.resolve(__dirname, name), 'utf8')
+const EFFECTS_PART = part('engine-effects.part.tsx')
+const LIFE_PART = part('engine-life.part.tsx')
+const SEQUENCE_PART = part('engine-sequence.part.tsx')
 
 function grab(name, endMark) {
   const i = t.indexOf(`const ${name} = `)
@@ -416,6 +419,21 @@ const SETTLE_MS = 1400
 
 ${EFFECTS_PART.trim()}
 
+${LIFE_PART.trim()}
+
+${SEQUENCE_PART.trim()}
+
+/**
+ * States built in Blob Studio and baked in at export.
+ *
+ * Empty in the studio's own copy — there, sequences arrive live through the \`sequence\`
+ * prop as you edit them. An exported component carries whatever you chose to ship, and its
+ * recipient plays one by name: \`<Avatar sequenceName="greeting" />\`.
+ */
+/* __SEQUENCES_START__ */
+export const SEQUENCES: Record<string, SequenceDef> = {}
+/* __SEQUENCES_END__ */
+
 /* ------------------------------------------------------------------ states */
 
 export type MascotState =
@@ -636,6 +654,19 @@ export interface MascotAvatarProps {
   autoBlink?: boolean
   autoExpression?: boolean
   paused?: boolean
+  /**
+   * Play an ordered sequence of expressions instead of the state's random pool. Overrides
+   * the state's own cycling and blink cadence; the state still supplies body motion unless
+   * the sequence names its own.
+   */
+  sequence?: SequenceDef | null
+  /** One of the states baked in at export — see SEQUENCES. Ignored if \`sequence\` is set. */
+  sequenceName?: string
+  /**
+   * Micro-saccades — small eye movements between expression changes. Scaled by \`motion\`,
+   * so a caller who has already asked for stillness gets it.
+   */
+  life?: boolean
   /** Silhouette to wear. Defaults to the baked-in SHAPE. */
   shape?: MascotShape
   gradient?: [string, string, string]
@@ -671,6 +702,9 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       autoBlink = true,
       autoExpression = true,
       paused = false,
+      sequence = null,
+      sequenceName,
+      life = true,
       shape = SHAPE,
       gradient = DEFAULT_GRADIENT,
       eyeColor = '#ffffff',
@@ -705,6 +739,21 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
     )
     const motionStrength = motion ?? (prefersReducedMotion ? 0 : 1)
 
+    /*
+      Validated once rather than per frame. A step pointing at an expression that does not
+      exist is a thing an app can hand us, and it must not throw inside the frame loop.
+    */
+    const activeSequence = useMemo(
+      () =>
+        resolveSequence(
+          sequence ?? (sequenceName ? SEQUENCES[sequenceName] : null),
+          EXPRESSION_COUNT
+        ),
+      [sequence, sequenceName]
+    )
+    // Per instance, so a page showing forty mascots does not saccade in lockstep.
+    const saccadeSeed = useMemo(() => lifeSeed(uid), [uid])
+
     // Frame-loop state lives in a ref so prop changes never restart a morph.
     const engine = useRef({
       current: clone(EXPRESSIONS[0]),
@@ -719,6 +768,8 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       blinkStart: null as number | null,
       spinStart: null as number | null,
       spinDuration: 900,
+      /** Set by a sequence step so its transition feel outlives the effect that set it. */
+      springOverride: null as number | null,
       last: 0,
       stateStart: 0,
       lastState: state as MascotState,
@@ -735,6 +786,9 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         motionStrength,
         effects,
         glyphs,
+        life,
+        saccadeSeed,
+        sequenceMotion: activeSequence?.motion ?? null,
       },
     })
     engine.current.props = {
@@ -749,6 +803,9 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       motionStrength,
       effects,
       glyphs,
+      life,
+      saccadeSeed,
+      sequenceMotion: activeSequence?.motion ?? null,
     }
 
     const selectExpression = (index: number) => {
@@ -782,12 +839,48 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
     )
 
     useEffect(() => {
-      selectExpression(expression ?? POOLS[state][0])
-    }, [state, expression])
+      selectExpression(expression ?? activeSequence?.steps[0].expression ?? POOLS[state][0])
+    }, [state, expression, activeSequence])
 
+    /*
+      Two ways to change face, and only one runs at a time.
+
+      A state picks at random from its pool on a cadence, which is what makes a mood look
+      unscripted. A sequence walks its steps in order, holding each for its own time — the
+      order is the content, so randomising it would destroy the thing being authored.
+
+      Both stop dead when the caller pins an expression, and both stop when paused. The
+      sequence path also honours its own transition feel per step by overriding the spring
+      for the duration of that morph.
+    */
     useEffect(() => {
       if (!autoExpression || expression !== undefined || paused) return
       let timer: ReturnType<typeof setTimeout>
+
+      if (activeSequence) {
+        const steps = activeSequence.steps
+        let cursor = sequenceCursorStart()
+        const play = (first: boolean) => {
+          const step = steps[cursor.index]
+          engine.current.springOverride = sequenceSpring(
+            step.transition,
+            step.transitionMs,
+            spring
+          )
+          if (!first) selectExpression(step.expression)
+          if (cursor.done) return
+          timer = setTimeout(() => {
+            cursor = advanceSequence(steps.length, cursor, activeSequence.playback)
+            play(false)
+          }, step.holdMs + step.transitionMs)
+        }
+        play(true)
+        return () => {
+          clearTimeout(timer)
+          engine.current.springOverride = null
+        }
+      }
+
       const tick = () => {
         const [lo, hi] = EXPR_CADENCE[state]
         timer = setTimeout(() => {
@@ -803,10 +896,12 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       }
       tick()
       return () => clearTimeout(timer)
-    }, [state, autoExpression, expression, paused])
+    }, [state, autoExpression, expression, paused, activeSequence, spring])
 
     useEffect(() => {
-      const cadence = BLINK[state]
+      const cadence = activeSequence
+        ? activeSequence.blink && ([activeSequence.blink.minMs, activeSequence.blink.maxMs] as const)
+        : BLINK[state]
       if (!autoBlink || !cadence || paused) return
       let timer: ReturnType<typeof setTimeout>
       const tick = () => {
@@ -817,7 +912,7 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       }
       tick()
       return () => clearTimeout(timer)
-    }, [state, autoBlink, paused])
+    }, [state, autoBlink, paused, activeSequence])
 
     useEffect(() => {
       let frame = 0
@@ -835,6 +930,15 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         )
         const gx = clamp(p.gaze?.x ?? 0, -1, 1) * GAZE_X
         const gy = clamp(p.gaze?.y ?? 0, -1, 1) * GAZE_Y
+        /*
+          Micro-saccades ride on top of the constant aim, and only on the eyes: gx/gy move
+          the whole face because a deliberate look turns the head with it, but a saccade is
+          the eyes alone moving inside a face that stays put.
+        */
+        const [sx, sy] =
+          p.life === false
+            ? [0, 0]
+            : saccadeOffset(now, p.saccadeSeed ?? 0, p.motionStrength ?? 1)
         const radians = (((p.turn ?? 0) + spinTurn) * Math.PI) / 180
         const eyeSize = resolveEyeScale(p.eyeScale, rings)
         const blink = blinkScale(e, now)
@@ -851,8 +955,8 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
           el.setAttribute('d', toPath(ring))
           el.setAttribute(
             'transform',
-            \`translate(\${(SPHERE_C + SPHERE_R * Math.sin(longitude) + gx).toFixed(2)} \${(
-              c[1] + gy
+            \`translate(\${(SPHERE_C + SPHERE_R * Math.sin(longitude) + gx + sx).toFixed(2)} \${(
+              c[1] + gy + sy
             ).toFixed(2)}) scale(\${clamp(perspective * size[0], 0.02, 2.4).toFixed(4)} \${clamp(
               blink * size[1],
               0.02,
@@ -887,12 +991,19 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         // rather than in an effect — the loop already has the clock.
         const bodyEl = bodyGroup.current
         if (bodyEl) {
-          if (p.state !== e.lastState) {
-            e.lastState = p.state as MascotState
+          /*
+            A sequence may borrow a state's body motion by name; otherwise the state it is
+            playing under supplies it. The clock restarts on the motion, not on the state,
+            or a one-shot entrance would fail to replay when only the borrowed motion
+            changed.
+          */
+          const motionKey = (p.sequenceMotion ?? p.state) as MascotState
+          if (motionKey !== e.lastState) {
+            e.lastState = motionKey
             e.stateStart = now
           }
           const transform = bodyTransform(
-            MOTION[p.state as MascotState] ?? {},
+            MOTION[motionKey] ?? {},
             now - e.stateStart,
             p.motionStrength ?? 1
           )
@@ -930,7 +1041,7 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         e.last = now
         if (p.paused) return
 
-        const f = p.spring ?? 7
+        const f = e.springOverride ?? p.spring ?? 7
         e.velocity += (-2 * f * e.velocity - f * f * (e.morph - 1)) * dt
         e.morph += e.velocity * dt
         if (!Number.isFinite(e.morph)) {
@@ -1078,6 +1189,34 @@ export const MASCOT_FIT = SHAPE.fit
 
 export default MascotAvatar
 `
+
+/*
+  --check regenerates into memory and compares, without writing.
+
+  The engine is committed so a clean clone builds with nothing else present, which means
+  nothing otherwise notices when the lab or the effects part moves on and the committed file
+  does not. A stale engine is a silent bug: the preview and the export both come from it, so
+  they agree with each other while disagreeing with the source they claim to be generated
+  from.
+*/
+if (process.argv.includes('--check')) {
+  const current = fs.existsSync(DEST) ? fs.readFileSync(DEST, 'utf8') : null
+  if (current === out) {
+    console.log('engine is current —', path.relative(process.cwd(), DEST))
+    process.exit(0)
+  }
+  console.error(
+    [
+      current === null
+        ? 'The generated engine is missing: ' + path.relative(process.cwd(), DEST)
+        : 'The generated engine is stale: ' + path.relative(process.cwd(), DEST),
+      '',
+      'It no longer matches what the lab and scripts/engine-effects.part.tsx produce.',
+      'Run `npm run gen:engine` and commit the result.',
+    ].join('\n')
+  )
+  process.exit(1)
+}
 
 fs.mkdirSync(path.dirname(DEST), { recursive: true })
 fs.writeFileSync(DEST, out)

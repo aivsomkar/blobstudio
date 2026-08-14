@@ -17,6 +17,7 @@ import {
   GAZE_TRAVEL,
   MOUTHS,
   MOUTH_STROKE,
+  SACCADE_RADIUS,
   mouthFrame,
 } from '../engine/faceEngine'
 import { largestInscribedCircle, sampleSdf, type Sdf } from './sdf'
@@ -48,17 +49,28 @@ export interface Aim {
 }
 
 /**
- * Builds the point cloud per expression. `lookAround` and `aim` must match what the engine
- * renders, or the clipping report will disagree with what people can plainly see: aiming
- * the eyes at an edge moves every face point toward it.
+ * Builds the point cloud per expression. `lookAround`, `aim` and `life` must match what the
+ * engine renders, or the clipping report will disagree with what people can plainly see:
+ * aiming the eyes at an edge moves every face point toward it.
+ *
+ * Micro-saccades are handled as clearance rather than as extra points. A saccade displaces
+ * an eye by up to SACCADE_RADIUS in an arbitrary direction, and the field's distance is
+ * isotropic, so requiring that much more room is exactly equivalent to testing every
+ * position the eye could reach — at no cost in points, and with no chance of sampling the
+ * one direction that happened to be fine.
+ *
+ * The mouth is deliberately excluded: the engine applies the saccade to the eye transform
+ * alone, so charging the mouth for it would shrink every face to buy clearance nothing uses.
  */
 export function buildClouds(
   lookAround: number,
   mouthStroke = MOUTH_STROKE,
-  aim: Aim = { x: 0, y: 0 }
+  aim: Aim = { x: 0, y: 0 },
+  life = true
 ): Cloud[] {
   const aimX = clamp(aim.x, -1, 1) * GAZE_TRAVEL.x
   const aimY = clamp(aim.y, -1, 1) * GAZE_TRAVEL.y
+  const eyePad = PAD + (life ? SACCADE_RADIUS : 0)
   return EXPRESSIONS.map((ex, k) => {
     const ox = GAZE[k][0] * lookAround + aimX
     const oy = GAZE[k][1] * lookAround + aimY
@@ -69,7 +81,7 @@ export function buildClouds(
     for (const ring of rings) {
       for (const p of ring) {
         xs.push(p[0] - FACE_CENTRE[0], p[1] - FACE_CENTRE[1])
-        needs.push(PAD)
+        needs.push(eyePad)
       }
     }
 
@@ -142,9 +154,10 @@ export function solveFit(
   sdf: Sdf,
   lookAround: number,
   mouthStroke = MOUTH_STROKE,
-  aim: Aim = { x: 0, y: 0 }
+  aim: Aim = { x: 0, y: 0 },
+  life = true
 ): FitResult {
-  const clouds = buildClouds(lookAround, mouthStroke, aim)
+  const clouds = buildClouds(lookAround, mouthStroke, aim, life)
   const seed = largestInscribedCircle(sdf)
 
   // Cap at the size the expressions were drawn for. The artwork is fitted to the same box

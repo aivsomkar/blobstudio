@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { EXPRESSION_COUNT, type MascotShape } from '../engine/faceEngine'
-import { faceMarkup, type FrameOptions } from '../export/frames'
+import type { FrameOptions } from '../export/frames'
+import { FaceThumb, useThumbBody } from './FaceThumb'
 import { Scrub } from './Scrub'
 
 /**
@@ -11,7 +12,8 @@ import { Scrub } from './Scrub'
  * SVG frames — and it turns choosing a face back into looking at faces.
  *
  * The thumbnails are drawn from the live shape and colours, so they stay honest when either
- * changes; a grid of stale circles beside a green blob is worse than numbers.
+ * changes; a grid of stale circles beside a green blob is worse than numbers. The shared
+ * gradient and clip live in ThumbDefs, which the page mounts — see FaceThumb.
  */
 interface Props {
   shape: MascotShape
@@ -30,10 +32,6 @@ interface Props {
   onBlink: () => void
   onRandom: () => void
 }
-
-const MARGIN = 15
-const FACE_BOX = 228.541
-const VIEW_BOX = `${-MARGIN} ${-MARGIN} ${FACE_BOX + MARGIN * 2} ${FACE_BOX + MARGIN * 2}`
 
 export function ExpressionGrid({
   shape,
@@ -55,17 +53,7 @@ export function ExpressionGrid({
     [shape, gradient, eyeColor, lookAround, showMouth, mouthStroke]
   )
 
-  // One body for the whole grid: the silhouette is identical in every tile, so drawing it
-  // 25 times is 25 copies of the same path. Only the face differs.
-  const body = useMemo(
-    () => shape.body.replace(/\{\{GRADIENT\}\}/g, 'url(#thumb-grad)'),
-    [shape.body]
-  )
-
-  const faces = useMemo(
-    () => Array.from({ length: EXPRESSION_COUNT }, (_, i) => faceMarkup(i, options)),
-    [options]
-  )
+  const body = useThumbBody(shape)
 
   return (
     <div className="panel">
@@ -73,22 +61,6 @@ export function ExpressionGrid({
         <h2>Expressions</h2>
         <span className="count">{EXPRESSION_COUNT} presets</span>
       </div>
-
-      {/* The gradient and clip are defined once and referenced by every tile. */}
-      <svg className="thumb-defs" aria-hidden="true">
-        <defs>
-          <linearGradient id="thumb-grad" x1="1" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={gradient[0]} />
-            <stop offset="55%" stopColor={gradient[1]} />
-            <stop offset="100%" stopColor={gradient[2]} />
-          </linearGradient>
-          <clipPath
-            id="thumb-clip"
-            transform={shape.fit || undefined}
-            dangerouslySetInnerHTML={{ __html: shape.clip }}
-          />
-        </defs>
-      </svg>
 
       <div className="thumbs">
         <button
@@ -98,7 +70,7 @@ export function ExpressionGrid({
         >
           auto
         </button>
-        {faces.map((face, i) => (
+        {Array.from({ length: EXPRESSION_COUNT }, (_, i) => (
           <button
             key={i}
             className={
@@ -109,10 +81,7 @@ export function ExpressionGrid({
             onClick={() => onExpression(i)}
             title={clipping.includes(i) ? `Expression ${i} clips at this size` : `Expression ${i}`}
           >
-            <svg viewBox={VIEW_BOX} aria-hidden="true">
-              <g transform={shape.fit || undefined} dangerouslySetInnerHTML={{ __html: body }} />
-              <g clipPath="url(#thumb-clip)" dangerouslySetInnerHTML={{ __html: face }} />
-            </svg>
+            <FaceThumb body={body} shape={shape} options={options} expression={i} />
             <em>{String(i).padStart(2, '0')}</em>
           </button>
         ))}

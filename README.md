@@ -18,6 +18,8 @@ expression pool on its own cadence, and blinks on its own rhythm.
 npm install
 npm run dev      # http://localhost:5173
 npm run build    # static files in dist/ — deploy anywhere
+npm test         # geometry, solver, importer, persistence
+npm run check    # engine freshness + lint + tests + build, same as CI
 ```
 
 `src/engine/faceEngine.tsx` is generated but committed, so `build` never regenerates it —
@@ -46,11 +48,102 @@ src/engine/faceEngine.tsx   the animation engine — GENERATED, and the export p
 src/svg/import.ts           parse, sanitize, namespace, measure
 src/fit/sdf.ts              rasterise → signed distance field
 src/fit/solve.ts            anchor/scale search + clipping report
+src/state/project.ts        what persists between visits, and the .blobstudio.json file
 src/export/generate.ts      assemble the downloadable .tsx
+src/export/snapshot.ts      Photo Mode — the live frame, serialized
 src/shapes/builtin.ts       nine parametric starting shapes
-src/ui/                     dropzone, shape, head, fit, colour, expressions, states, export
-scripts/gen-engine.cjs      regenerates the engine from the GrokBot lab
+src/ui/                     dropzone, shape, head, fit, colour, expressions, your states,
+                            photo, export, project
+scripts/gen-engine.cjs         regenerates the engine from the GrokBot lab
+scripts/engine-effects.part.tsx  confetti, comets, glyphs
+scripts/engine-life.part.tsx     micro-saccades
+scripts/engine-sequence.part.tsx custom-state playback
 ```
+
+`npm run gen:engine:check` regenerates into memory and compares against the committed
+engine without writing. It runs first in `npm run check` and in CI, because a stale engine
+is otherwise silent: the preview and the export both come from it, so they agree with each
+other while disagreeing with the lab they claim to be generated from.
+
+## What is kept
+
+Your shape, fit, gaze, colours and toggles autosave to this browser as you work, so a
+reload lands you back where you were. The distance field is not stored — it is a megabyte
+of derived data, and the solver rebuilds it inside a frame. An upload keeps its original
+file text rather than the sanitized result, so restoring replays the whole import path and
+markup that has been sitting in localStorage gets re-sanitized rather than trusted because
+it was clean once. Reads are defensive per field: a corrupted gaze costs you a gaze, not the
+artwork you spent ten minutes fitting.
+
+One consequence worth naming: the **Effects**, **Glyphs** and **Life** toggles persist too.
+They used to reset on every reload, so a stray click healed itself; now it follows you. Since
+17 of the 40 states draw something extra — and body motion at zero suppresses effects as well,
+because a burst thrown from a still body reads as debris — the stage says when a switch is
+hiding something, and offers to undo it.
+
+**Download project** writes the same object as `<name>.blobstudio.json`. That is the backup —
+clearing site data takes the stored copy with it — and the way a mascot moves between
+machines. An SVG too large for the storage quota is dropped from the autosave rather than
+failing it, and the panel says so.
+
+## Your own states
+
+The 40 built-in states pick from a pool at random on a cadence, which is what makes a mood
+look unscripted. It is exactly wrong for a scripted beat — "look up, pause, nod" — where the
+order *is* the content, and it is the only thing on offer if your app needs a `syncing` state
+the lab never authored.
+
+**Your states** is the other tool: ordered steps, each with its own hold, morph time and
+transition feel (`smooth`, `spring`, `snappy`), played `loop`, `once` or `pingPong`, with its
+own blink cadence and optionally another state's body motion borrowed by name.
+
+They travel with the export. Each becomes an entry in `SEQUENCES`, keyed by a slug of its
+name, and the recipient plays one by name:
+
+```tsx
+<RoboAvatar sequenceName="greeting" size={160} />
+```
+
+Steps reference an expression by index, because that is the only identity the expressions
+have — the 25 outlines are generated into the engine as an ordered table, not authored in the
+studio. A step pointing past the end of that table is dropped on load rather than wrapped to
+a face nobody chose.
+
+Ping-pong turns around at the ends without repeating them, so a three-step state reads
+0,1,2,1,0 — repeating an endpoint holds it for double time and reads as a stumble.
+
+## Eye life
+
+Between expression changes the eyes used to be perfectly motionless, which is uncanny in a
+way that is hard to name and easy to feel. **Life** adds micro-saccades: small ballistic
+jumps a few times a second — fast in, slow out — with a little drift while held.
+
+Three properties it has to have, and does:
+
+- **Eyes only.** `gaze` moves the whole face, because a deliberate look turns the head with
+  it. A saccade is the eyes alone moving inside a face that stays put.
+- **Desynchronised.** Seeded per component instance, not per expression, because the state
+  grid puts forty mascots on screen and forty eyes twitching on the same frame reads as the
+  page stuttering.
+- **Paid for in the fit.** The solver widens every eye point's required clearance by the
+  saccade radius, so the clipping report stays true. This costs face size on tight
+  silhouettes — that is the honest price of live eyes, and turning **Life** off refits
+  larger.
+
+Scaled by `motion`, so `motion={0}` and a reduced-motion preference still hold perfectly
+still.
+
+## Photo Mode
+
+The library export renders stills from geometry, which is right for a catalogue: with no
+turn, gaze or blink an expression collapses to two eye rings and a mouth. It is the wrong
+tool for "grab this exact instant", because everything worth catching mid-animation — a
+comet halfway round its ring, a landing squash, confetti in flight — lives in attributes the
+frame loop writes imperatively.
+
+So **Photo** serializes the live `<svg>` out of the DOM instead, at 256/512/1024 as SVG or
+PNG, over a transparent, solid, linear or radial background. **Hold the frame** freezes the
+stage so you can catch a specific instant rather than gambling on the click.
 
 The engine is imported normally for the live preview *and* via Vite's `?raw` for the export
 template, so the preview and the downloaded file cannot drift apart.

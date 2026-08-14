@@ -8,7 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "gen:engine": "node scripts/gen-engine.cjs"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "gen:engine": "node scripts/gen-engine.cjs",
+    "gen:engine:check": "node scripts/gen-engine.cjs --check",
+    "check": "npm run gen:engine:check && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
     "react": "^19.2.8",
@@ -19,8 +23,10 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
+    "jsdom": "^30.0.1",
     "oxlint": "^1.75.0",
     "typescript": "~6.0.2",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "vitest": "^4.1.10"
   }
 }

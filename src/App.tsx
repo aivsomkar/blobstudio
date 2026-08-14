@@ -4,7 +4,6 @@ import {
   MASCOT_STATES,
   STATE_GROUPS,
   EXPRESSION_COUNT,
-  DEFAULT_GRADIENT,
   POOLS,
   type MascotAvatarHandle,
   type MascotShape,
@@ -14,15 +13,36 @@ import { importSvg, SvgImportError, type ImportedShape } from './svg/import'
 import { buildSdf, type Sdf } from './fit/sdf'
 import { buildClouds, report, solveFit } from './fit/solve'
 import { BUILTIN_SHAPES, builtinToSvg, type BuiltinShape } from './shapes/builtin'
+import {
+  clearProject,
+  defaultProject,
+  loadProject,
+  parseProjectFile,
+  projectFileName,
+  ProjectFileError,
+  saveProject,
+  serializeProject,
+  toSequence,
+  type CustomState,
+  type Project,
+  type SaveResult,
+} from './state/project'
+import { describeSuppression, suppressedEffect } from './state/effects'
+import { downloadFile } from './export/generate'
 import { Dropzone } from './ui/Dropzone'
 import { GazePad, type Aim } from './ui/GazePad'
 import { FitPanel } from './ui/FitPanel'
 import { ColorPanel } from './ui/ColorPanel'
 import { StateGrid } from './ui/StateGrid'
 import { ExportPanel } from './ui/ExportPanel'
+import { PhotoPanel } from './ui/PhotoPanel'
+import { ProjectPanel } from './ui/ProjectPanel'
 import { ShapePanel } from './ui/ShapePanel'
+import { StatePanel } from './ui/StatePanel'
 import { HeadPanel } from './ui/HeadPanel'
 import { ExpressionGrid } from './ui/ExpressionGrid'
+import { FaceThumb, ThumbDefs, useThumbBody } from './ui/FaceThumb'
+import type { FrameOptions } from './export/frames'
 import { MOUTH_STROKE } from './engine/faceEngine'
 
 export interface Mascot {
@@ -32,51 +52,70 @@ export interface Mascot {
   sdf: Sdf
 }
 
+type Anchor = Mascot['anchor']
+
+const initial = defaultProject()
+
 export default function App() {
   const [mascot, setMascot] = useState<Mascot | null>(null)
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [state, setState] = useState<MascotState>('idle')
+  const [notice, setNotice] = useState<string | null>(null)
+  const [state, setState] = useState<MascotState>(initial.state)
   const [expression, setExpression] = useState<number | undefined>(undefined)
-  const [lookAround, setLookAround] = useState(0.35)
+  const [lookAround, setLookAround] = useState(initial.lookAround)
   // A touch off-centre by default: dead-centre eyes read as a stare.
-  const [gaze, setGaze] = useState<Aim>({ x: 0.22, y: 0 })
-  const [motion, setMotion] = useState(1)
-  const [gradient, setGradient] = useState<[string, string, string]>(DEFAULT_GRADIENT)
-  const [eyeColor, setEyeColor] = useState('#ffffff')
-  const [showMouth, setShowMouth] = useState(true)
-  const [effects, setEffects] = useState(true)
-  const [glyphs, setGlyphs] = useState(true)
-  const [useGradient, setUseGradient] = useState(true)
+  const [gaze, setGaze] = useState<Aim>(initial.gaze)
+  const [motion, setMotion] = useState(initial.motion)
+  const [gradient, setGradient] = useState<[string, string, string]>(initial.gradient)
+  const [eyeColor, setEyeColor] = useState(initial.eyeColor)
+  const [showMouth, setShowMouth] = useState(initial.showMouth)
+  const [effects, setEffects] = useState(initial.effects)
+  const [glyphs, setGlyphs] = useState(initial.glyphs)
+  const [useGradient, setUseGradient] = useState(initial.useGradient)
   // Null once an upload is in play: parameters only mean something for generated shapes.
-  const [shapeId, setShapeId] = useState<string | null>(BUILTIN_SHAPES[0].id)
-  const [shapeParams, setShapeParams] = useState<Record<string, number>>(
-    BUILTIN_SHAPES[0].defaults
+  const [shapeId, setShapeId] = useState<string | null>(initial.shapeId)
+  const [shapeParams, setShapeParams] = useState<Record<string, number>>(initial.shapeParams)
+  /** The uploaded file's own text, kept so a project can replay the exact import. */
+  const [upload, setUpload] = useState<string | null>(null)
+  const [linkedEyes, setLinkedEyes] = useState(initial.linkedEyes)
+  const [eyes, setEyes] = useState<{ left: [number, number]; right: [number, number] }>(
+    initial.eyes
   )
-  const [linkedEyes, setLinkedEyes] = useState(true)
-  const [eyes, setEyes] = useState<{ left: [number, number]; right: [number, number] }>({
-    left: [1, 1],
-    right: [1, 1],
-  })
-  const [spring, setSpring] = useState(7)
-  const [dark, setDark] = useState(true)
+  const [spring, setSpring] = useState(initial.spring)
+  const [dark, setDark] = useState(initial.dark)
+  const [life, setLife] = useState(initial.life)
+  const [customStates, setCustomStates] = useState<CustomState[]>(initial.customStates)
+  const [activeCustomStateId, setActiveCustomStateId] = useState<string | null>(
+    initial.activeCustomStateId
+  )
+  const [paused, setPaused] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<SaveResult | null>(null)
   const avatar = useRef<MascotAvatarHandle>(null)
+  const preview = useRef<HTMLDivElement>(null)
   const gazeRef = useRef(gaze)
   gazeRef.current = gaze
+  const lookAroundRef = useRef(lookAround)
+  lookAroundRef.current = lookAround
+  const lifeRef = useRef(life)
+  lifeRef.current = life
 
-  /** Import markup, measure it, and place the face. Shared by uploads and builtins. */
+  /**
+   * Import markup, measure it, and place the face. Shared by uploads, builtins and restores.
+   * A restore passes its saved anchor; everything else solves for one.
+   */
   const load = useCallback(
-    async (source: string, name: string, isUpload = false) => {
+    async (source: string, name: string, options: { anchor?: Anchor } = {}) => {
       setBusy(true)
       setError(null)
       try {
         const imported = importSvg(source, name)
         const sdf = await buildSdf(imported.clip || imported.body, imported.fit)
-        const fit = solveFit(sdf, lookAround, undefined, gazeRef.current)
-        setMascot({ name, imported, anchor: fit.anchor, sdf })
-        // Someone uploading finished artwork wants to keep its colours. The built-ins are
-        // plain silhouettes drawn to take the gradient, so they start recoloured.
-        setUseGradient(!isUpload)
+        const anchor =
+          options.anchor ??
+          solveFit(sdf, lookAroundRef.current, undefined, gazeRef.current, lifeRef.current)
+            .anchor
+        setMascot({ name, imported, anchor, sdf })
       } catch (e) {
         setError(
           e instanceof SvgImportError || e instanceof Error
@@ -87,19 +126,145 @@ export default function App() {
         setBusy(false)
       }
     },
-    [lookAround]
+    []
   )
 
-  // Open on the circle, so the page is alive before anyone uploads anything.
+  /** Pushes a stored project back into the panels. Geometry is loaded separately. */
+  const applyProject = useCallback((project: Project) => {
+    setState(project.state)
+    setExpression(undefined)
+    setLookAround(project.lookAround)
+    lookAroundRef.current = project.lookAround
+    setGaze(project.gaze)
+    gazeRef.current = project.gaze
+    setMotion(project.motion)
+    setSpring(project.spring)
+    setGradient(project.gradient)
+    setEyeColor(project.eyeColor)
+    setUseGradient(project.useGradient)
+    setShowMouth(project.showMouth)
+    setEffects(project.effects)
+    setGlyphs(project.glyphs)
+    setDark(project.dark)
+    setLife(project.life)
+    lifeRef.current = project.life
+    setCustomStates(project.customStates)
+    setActiveCustomStateId(project.activeCustomStateId)
+    setEyes(project.eyes)
+    setLinkedEyes(project.linkedEyes)
+    setShapeId(project.shapeId)
+    setShapeParams(project.shapeParams)
+    setUpload(project.upload)
+  }, [])
+
+  /** The markup a project describes: its own artwork, or the built-in it names. */
+  const sourceFor = useCallback((project: Project) => {
+    if (project.upload) return { source: project.upload, name: project.name }
+    const shape = BUILTIN_SHAPES.find(item => item.id === project.shapeId) ?? BUILTIN_SHAPES[0]
+    return { source: builtinToSvg(shape, project.shapeParams), name: shape.name }
+  }, [])
+
+  const openProject = useCallback(
+    (project: Project) => {
+      applyProject(project)
+      const { source, name } = sourceFor(project)
+      void load(source, name, { anchor: project.anchor })
+    },
+    [applyProject, load, sourceFor]
+  )
+
+  /*
+    Boot. A returning visitor lands on their own mascot; a first-time one lands on the
+    circle, so the page is alive before anyone uploads anything. The saved anchor is used
+    as-is rather than re-solved — someone who nudged the fit by hand should get their fit
+    back, not the solver's opinion of it.
+  */
+  const ready = useRef(false)
   useEffect(() => {
-    const circle = BUILTIN_SHAPES[0]
-    void load(builtinToSvg(circle, circle.defaults), circle.name)
+    const stored = loadProject()
+    if (stored) {
+      if (stored.uploadDropped) {
+        setNotice(
+          'Your artwork was too large for browser storage, so the studio opened on a plain shape. Download the project next time to keep it.'
+        )
+      }
+      openProject(stored)
+    } else {
+      const circle = BUILTIN_SHAPES[0]
+      void load(builtinToSvg(circle, circle.defaults), circle.name)
+    }
+    ready.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /** Everything the panels can change, as one saveable object. */
+  const project = useMemo<Project>(
+    () => ({
+      version: initial.version,
+      name: mascot?.name ?? initial.name,
+      upload,
+      shapeId,
+      shapeParams,
+      anchor: mascot?.anchor ?? initial.anchor,
+      gaze,
+      lookAround,
+      motion,
+      spring,
+      eyes,
+      linkedEyes,
+      gradient,
+      eyeColor,
+      useGradient,
+      showMouth,
+      effects,
+      glyphs,
+      dark,
+      life,
+      state,
+      customStates,
+      activeCustomStateId,
+    }),
+    [
+      mascot,
+      upload,
+      shapeId,
+      shapeParams,
+      gaze,
+      lookAround,
+      motion,
+      spring,
+      eyes,
+      linkedEyes,
+      gradient,
+      eyeColor,
+      useGradient,
+      showMouth,
+      effects,
+      glyphs,
+      dark,
+      life,
+      state,
+      customStates,
+      activeCustomStateId,
+    ]
+  )
+
+  /*
+    Autosave, debounced. Held until the boot restore has run, or the first render would
+    overwrite a stored project with the defaults it is about to replace.
+  */
+  useEffect(() => {
+    if (!ready.current || !mascot) return
+    const timer = window.setTimeout(() => setSaveStatus(saveProject(project)), 400)
+    return () => window.clearTimeout(timer)
+  }, [project, mascot])
 
   const pickShape = (shape: BuiltinShape) => {
     setShapeId(shape.id)
     setShapeParams(shape.defaults)
+    setUpload(null)
+    // The built-ins are plain silhouettes drawn to take the gradient.
+    setUseGradient(true)
     void load(builtinToSvg(shape, shape.defaults), shape.name)
   }
 
@@ -133,24 +298,84 @@ export default function App() {
     }
   }, [mascot, useGradient])
 
+  /* Shared by the expression picker and the state builder — see FaceThumb. */
+  const thumbBody = useThumbBody(shape)
+  const thumbOptions = useMemo<FrameOptions | null>(
+    () =>
+      shape
+        ? { shape, gradient, eyeColor, lookAround, showMouth, mouthStroke: MOUTH_STROKE }
+        : null,
+    [shape, gradient, eyeColor, lookAround, showMouth]
+  )
+
+  /*
+    A custom state is played by handing the engine its resolved sequence. Selecting one
+    also clears any pinned expression, because pinning is the one thing that stops a
+    sequence dead — the two controls contradict each other by design.
+  */
+  const activeCustomState = useMemo(
+    () => customStates.find(item => item.id === activeCustomStateId) ?? null,
+    [customStates, activeCustomStateId]
+  )
+  const sequence = useMemo(
+    () => (activeCustomState ? toSequence(activeCustomState) : null),
+    [activeCustomState]
+  )
+
+  /*
+    The toggles persist now, so a state that draws comets can sit there drawing nothing with
+    no visible reason why. Only reported for the built-in states: a custom state plays
+    expressions, and its body motion is borrowed rather than its own.
+  */
+  const suppressed = useMemo(
+    () => (activeCustomState ? null : suppressedEffect(state, { effects, glyphs, motion })),
+    [activeCustomState, state, effects, glyphs, motion]
+  )
+
   /** Live clipping report — recomputed whenever the placement or gaze changes. */
   const fitReport = useMemo(() => {
     if (!mascot) return null
-    return report(buildClouds(lookAround, undefined, gaze), mascot.sdf, mascot.anchor)
-  }, [mascot, lookAround, gaze])
+    return report(buildClouds(lookAround, undefined, gaze, life), mascot.sdf, mascot.anchor)
+  }, [mascot, lookAround, gaze, life])
 
-  const setAnchor = (next: Partial<Mascot['anchor']>) =>
+  const setAnchor = (next: Partial<Anchor>) =>
     setMascot(m => (m ? { ...m, anchor: { ...m.anchor, ...next } } : m))
 
   const autoFit = () =>
     setMascot(m =>
-      m ? { ...m, anchor: solveFit(m.sdf, lookAround, undefined, gaze).anchor } : m
+      m ? { ...m, anchor: solveFit(m.sdf, lookAround, undefined, gaze, life).anchor } : m
     )
 
   const onUpload = async (file: File) => {
     const text = await file.text()
+    const name = file.name.replace(/\.svg$/i, '') || 'Mascot'
     setShapeId(null)
-    await load(text, file.name.replace(/\.svg$/i, '') || 'Mascot', true)
+    setUpload(text)
+    // Someone uploading finished artwork wants to keep its colours.
+    setUseGradient(false)
+    setNotice(null)
+    await load(text, name)
+  }
+
+  const onOpenProject = async (file: File) => {
+    setNotice(null)
+    try {
+      openProject(parseProjectFile(await file.text()))
+    } catch (e) {
+      setError(
+        e instanceof ProjectFileError || e instanceof Error
+          ? e.message
+          : 'Could not read that project.'
+      )
+    }
+  }
+
+  const onResetProject = () => {
+    clearProject()
+    setNotice(null)
+    setError(null)
+    setSaveStatus(null)
+    openProject(defaultProject())
   }
 
   /** Jump to a random face from this state's own pool, the way the engine would. */
@@ -192,10 +417,11 @@ export default function App() {
           {error}
         </div>
       )}
+      {notice && <div className="banner">{notice}</div>}
 
       <div className="layout">
         <section className="stage">
-          <div className={'preview' + (dark ? ' dark' : '')}>
+          <div className={'preview' + (dark ? ' dark' : '')} ref={preview}>
             {shape && (
               <MascotAvatar
                 ref={avatar}
@@ -212,6 +438,9 @@ export default function App() {
                 gradient={gradient}
                 eyeColor={eyeColor}
                 showMouth={showMouth}
+                paused={paused}
+                sequence={sequence}
+                life={life}
                 size="100%"
                 title={`${mascot?.name} preview`}
               />
@@ -220,8 +449,14 @@ export default function App() {
           </div>
 
           <div className="stage-meta">
-            <strong>{state}</strong>
-            <span>{expression === undefined ? 'auto' : `expression ${pad(expression)}`}</span>
+            <strong>{activeCustomState ? activeCustomState.name : state}</strong>
+            <span>
+              {activeCustomState
+                ? `${activeCustomState.steps.length} steps · ${activeCustomState.playback}`
+                : expression === undefined
+                  ? 'auto'
+                  : `expression ${pad(expression)}`}
+            </span>
           </div>
 
           <div className="row">
@@ -254,7 +489,39 @@ export default function App() {
             >
               Dark
             </button>
+            <button
+              className={life ? 'on' : ''}
+              onClick={() => setLife(v => !v)}
+              title="Micro-saccades — small eye movements between expression changes"
+            >
+              Life
+            </button>
+            <button
+              className={paused ? 'on' : ''}
+              onClick={() => setPaused(v => !v)}
+              title="Freeze the stage on this frame"
+            >
+              Hold
+            </button>
           </div>
+
+          {suppressed && (
+            <p className="suppressed">
+              <span>{describeSuppression(suppressed)}</span>
+              <button
+                onClick={() => {
+                  // Fixing one reason is not always enough, so clear all of them.
+                  for (const reason of suppressed.reasons) {
+                    if (reason === 'effects') setEffects(true)
+                    if (reason === 'glyphs') setGlyphs(true)
+                    if (reason === 'motion') setMotion(1)
+                  }
+                }}
+              >
+                Show it
+              </button>
+            </p>
+          )}
 
           {mascot?.imported.warnings.map(w => (
             <p className="warning" key={w}>
@@ -264,6 +531,8 @@ export default function App() {
         </section>
 
         <section className="panels">
+          {shape && <ThumbDefs shape={shape} gradient={gradient} />}
+
           <Dropzone onFile={onUpload} busy={busy} />
 
           <ShapePanel
@@ -326,6 +595,39 @@ export default function App() {
           )}
 
           {shape && (
+            <StatePanel
+              states={customStates}
+              activeId={activeCustomStateId}
+              onStates={setCustomStates}
+              onActive={id => {
+                setActiveCustomStateId(id)
+                setExpression(undefined)
+              }}
+              renderExpression={(index, size) => (
+                <FaceThumb
+                  body={thumbBody}
+                  shape={shape}
+                  options={thumbOptions!}
+                  expression={index}
+                  size={size}
+                />
+              )}
+              clipping={fitReport?.clipping ?? []}
+            />
+          )}
+
+          {shape && (
+            <PhotoPanel
+              getSvg={() => preview.current?.querySelector('svg') ?? null}
+              name={mascot!.name}
+              state={state}
+              gradient={gradient}
+              paused={paused}
+              onPaused={setPaused}
+            />
+          )}
+
+          {shape && (
             <ExportPanel
               key={mascot!.name}
               defaultName={mascot!.name}
@@ -337,8 +639,18 @@ export default function App() {
               motion={motion}
               effects={effects}
               glyphs={glyphs}
+              customStates={customStates}
             />
           )}
+
+          <ProjectPanel
+            status={saveStatus}
+            onSave={() =>
+              downloadFile(projectFileName(project.name), serializeProject(project))
+            }
+            onOpen={file => void onOpenProject(file)}
+            onReset={onResetProject}
+          />
         </section>
       </div>
 

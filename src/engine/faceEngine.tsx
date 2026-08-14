@@ -1115,6 +1115,267 @@ export function updateEffects(frame: EffectFrame) {
   }
 }
 
+/* -------------------------------------------------------------------- life */
+
+/**
+ * Micro-saccades — the thing that separates "still" from "dead".
+ *
+ * The body already breathes and bounces, but between expression changes the eyes were
+ * perfectly motionless, which is uncanny in a way that is hard to name and easy to feel.
+ * Real eyes never hold still: they make small fast jumps a few times a second, with slow
+ * drift in between.
+ *
+ * Three properties this has to have:
+ *
+ * **Eyes only.** The mouth keeps its own position. A whole-face jitter reads as the picture
+ * shaking; an eyes-only one reads as attention moving.
+ *
+ * **Fast in, slow out.** A saccade is ballistic — the jump takes about 40ms and the eye then
+ * sits at the new target. Easing it symmetrically would read as a float rather than a flick.
+ *
+ * **Desynchronised per mascot.** A page showing every state at once has forty of these on
+ * screen. Seeded from the instance rather than from the expression, so they do not all
+ * twitch on the same frame — which would read as the page stuttering, not as forty
+ * characters looking around.
+ *
+ * Bounded on purpose: the fit solver has to widen every eye point's required clearance by
+ * this much, so a generous amplitude is paid for in face size on every silhouette.
+ */
+export const SACCADE_TRAVEL = { x: 2.2, y: 1.4 }
+
+/** Worst-case excursion in any direction, which is what the solver has to leave room for. */
+export const SACCADE_RADIUS = Math.hypot(SACCADE_TRAVEL.x, SACCADE_TRAVEL.y)
+
+/** Mean time between jumps. Jittered per jump so the rhythm never reads as a metronome. */
+const SACCADE_INTERVAL = 1150
+/** How long the jump itself takes. Short — this is the ballistic part. */
+const SACCADE_RISE = 45
+
+const lifeHash = (n: number) => {
+  const x = Math.sin(n * 91.7 + 47.3) * 28461.13
+  return (x - Math.floor(x)) * 2 - 1
+}
+
+/** Stable per-instance number from the component's uid, so two mascots differ. */
+export const lifeSeed = (uid: string) => {
+  let hash = 0
+  for (let i = 0; i < uid.length; i++) hash = (hash * 31 + uid.charCodeAt(i)) % 100000
+  return hash
+}
+
+/**
+ * Where the eyes are looking right now, relative to their resting position.
+ *
+ * Each interval picks a fresh target and jumps to it. Between jumps the eyes drift very
+ * slightly, which is what stops a held gaze from looking frozen while it waits.
+ */
+export function saccadeOffset(
+  elapsedMs: number,
+  seed: number,
+  strength: number
+): [number, number] {
+  if (strength <= 0) return [0, 0]
+
+  // Warp the clock so intervals vary; a fixed period is legible as a tick within seconds.
+  const warped = elapsedMs + Math.sin(elapsedMs / 1900 + seed) * 260
+  const step = Math.floor(warped / SACCADE_INTERVAL)
+  const into = warped - step * SACCADE_INTERVAL
+
+  const from = [lifeHash(step * 2 + seed), lifeHash(step * 2 + 1 + seed)]
+  const to = [lifeHash((step + 1) * 2 + seed), lifeHash((step + 1) * 2 + 1 + seed)]
+
+  // Fast in: the whole move happens in the first SACCADE_RISE ms of the interval.
+  const rise = Math.min(into / SACCADE_RISE, 1)
+  const eased = rise * rise * (3 - 2 * rise)
+  const held = (into - SACCADE_RISE) / SACCADE_INTERVAL
+
+  // Slow out: a little drift after landing, so the held position is not perfectly static.
+  const drift = Math.sin(held * 2.4 + seed) * 0.06
+
+  /*
+    Clamped to the unit box before scaling, and this matters more than it looks: the hash
+    already spans -1…1, so the drift on top of it can land just outside. The fit solver
+    reserves exactly SACCADE_TRAVEL of clearance for this function, so an offset a
+    thousandth of a unit over is not a rounding detail — it is the clipping report being
+    wrong, which is the one thing it is for.
+  */
+  return [
+    unit(from[0] + (to[0] - from[0]) * eased + drift) * SACCADE_TRAVEL.x * strength,
+    unit(from[1] + (to[1] - from[1]) * eased + drift * 0.6) * SACCADE_TRAVEL.y * strength,
+  ]
+}
+
+const unit = (value: number) => (value < -1 ? -1 : value > 1 ? 1 : value)
+
+/* ---------------------------------------------------------------- sequence */
+
+/**
+ * Custom states.
+ *
+ * The built-in states cycle a pool at random within a cadence, which is right for a mood:
+ * `thinking` should not play the same four faces in the same order forever. It is wrong for
+ * a scripted beat — "look up, pause, nod" — where the order is the whole point, and it is
+ * the only thing on offer if your app needs a state the lab never authored.
+ *
+ * A sequence is that other thing: ordered steps, each holding for its own time, with its own
+ * transition feel. Everything here is deliberately framework-free and side-effect-free so
+ * the same code runs the studio preview, the exported component, and the tests.
+ */
+
+export type SequenceTransition = 'spring' | 'smooth' | 'snappy'
+export type SequencePlayback = 'loop' | 'once' | 'pingPong'
+
+export interface SequenceStep {
+  /** Index into EXPRESSIONS. Validated on the way in — see resolveSequence. */
+  expression: number
+  /** How long this step is held once it has arrived. */
+  holdMs: number
+  /** How long the morph into this step should feel like it takes. */
+  transitionMs: number
+  transition: SequenceTransition
+}
+
+export interface SequenceDef {
+  name: string
+  steps: SequenceStep[]
+  playback: SequencePlayback
+  /** Null disables blinking for this sequence entirely. */
+  blink: { minMs: number; maxMs: number } | null
+  /** Name of a built-in state whose body motion to borrow, or null to hold still. */
+  motion: string | null
+}
+
+export interface SequenceCursor {
+  index: number
+  direction: 1 | -1
+  /** True once a `once` sequence has reached its last step and stopped. */
+  done: boolean
+}
+
+export const sequenceCursorStart = (): SequenceCursor => ({
+  index: 0,
+  direction: 1,
+  done: false,
+})
+
+/**
+ * Where the sequence goes next.
+ *
+ * pingPong turns around at the ends rather than repeating them, so a three-step sequence
+ * reads 0,1,2,1,0,1,2… — repeating the endpoint would hold it for double time and read as
+ * a stumble.
+ */
+export function advanceSequence(
+  stepCount: number,
+  cursor: SequenceCursor,
+  playback: SequencePlayback
+): SequenceCursor {
+  const last = stepCount - 1
+  if (last < 0) return { index: 0, direction: 1, done: true }
+  if (last === 0) return { index: 0, direction: 1, done: playback === 'once' }
+
+  if (playback === 'once') {
+    if (cursor.index >= last) return { index: last, direction: 1, done: true }
+    return { index: cursor.index + 1, direction: 1, done: false }
+  }
+
+  if (playback === 'pingPong') {
+    if (cursor.direction === 1 && cursor.index >= last) {
+      return { index: last - 1, direction: -1, done: false }
+    }
+    if (cursor.direction === -1 && cursor.index <= 0) {
+      return { index: 1, direction: 1, done: false }
+    }
+    return { index: cursor.index + cursor.direction, direction: cursor.direction, done: false }
+  }
+
+  return { index: cursor.index >= last ? 0 : cursor.index + 1, direction: 1, done: false }
+}
+
+/**
+ * The spring constant a step should morph with.
+ *
+ * The engine's morph is a spring, not a duration, so `transitionMs` is a feel rather than a
+ * measurement: a shorter time means a stiffer spring. The style then biases it — `smooth`
+ * settles without overshoot, `snappy` arrives hard, `spring` keeps the engine's own bounce.
+ */
+export function sequenceSpring(
+  transition: SequenceTransition,
+  transitionMs: number,
+  base: number
+): number {
+  const byDuration = Math.min(Math.max(500 / Math.max(transitionMs, 60), 0.35), 3)
+  const byStyle = transition === 'smooth' ? 0.72 : transition === 'snappy' ? 1.6 : 1
+  return Math.min(Math.max(base * byDuration * byStyle, 1), 40)
+}
+
+/**
+ * Makes an arbitrary object safe to play.
+ *
+ * Sequences arrive from localStorage, from a project file someone edited by hand, or from an
+ * app passing a prop. A step pointing at expression 99 must not throw mid-frame, and a
+ * sequence with no steps must not spin the timer at zero delay.
+ */
+export function resolveSequence(
+  value: SequenceDef | null | undefined,
+  expressionCount: number
+): SequenceDef | null {
+  if (!value || !Array.isArray(value.steps) || value.steps.length === 0) return null
+  const steps = value.steps
+    .filter(step => step && Number.isFinite(step.expression))
+    .map(step => ({
+      expression:
+        ((Math.round(step.expression) % expressionCount) + expressionCount) % expressionCount,
+      holdMs: clampNumber(step.holdMs, 120, 60000, 1400),
+      transitionMs: clampNumber(step.transitionMs, 0, 5000, 400),
+      transition: (['spring', 'smooth', 'snappy'] as SequenceTransition[]).includes(
+        step.transition
+      )
+        ? step.transition
+        : 'smooth',
+    }))
+  if (!steps.length) return null
+  const blink = value.blink
+    ? {
+        minMs: clampNumber(value.blink.minMs, 200, 60000, 3200),
+        maxMs: clampNumber(value.blink.maxMs, 200, 60000, 6000),
+      }
+    : null
+  if (blink) blink.maxMs = Math.max(blink.maxMs, blink.minMs)
+  return {
+    name: typeof value.name === 'string' && value.name ? value.name : 'sequence',
+    steps,
+    playback: (['loop', 'once', 'pingPong'] as SequencePlayback[]).includes(value.playback)
+      ? value.playback
+      : 'loop',
+    blink,
+    motion: typeof value.motion === 'string' && value.motion ? value.motion : null,
+  }
+}
+
+function clampNumber(value: number, min: number, max: number, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(Math.max(value, min), max)
+    : fallback
+}
+
+/** Total wall time for one pass, for a UI that wants to say how long a sequence runs. */
+export function sequenceDuration(sequence: SequenceDef): number {
+  const pass = sequence.steps.reduce((total, step) => total + step.holdMs + step.transitionMs, 0)
+  return sequence.playback === 'pingPong' && sequence.steps.length > 1 ? pass * 2 : pass
+}
+
+/**
+ * States built in Blob Studio and baked in at export.
+ *
+ * Empty in the studio's own copy — there, sequences arrive live through the `sequence`
+ * prop as you edit them. An exported component carries whatever you chose to ship, and its
+ * recipient plays one by name: `<Avatar sequenceName="greeting" />`.
+ */
+/* __SEQUENCES_START__ */
+export const SEQUENCES: Record<string, SequenceDef> = {}
+/* __SEQUENCES_END__ */
+
 /* ------------------------------------------------------------------ states */
 
 export type MascotState =
@@ -1896,6 +2157,19 @@ export interface MascotAvatarProps {
   autoBlink?: boolean
   autoExpression?: boolean
   paused?: boolean
+  /**
+   * Play an ordered sequence of expressions instead of the state's random pool. Overrides
+   * the state's own cycling and blink cadence; the state still supplies body motion unless
+   * the sequence names its own.
+   */
+  sequence?: SequenceDef | null
+  /** One of the states baked in at export — see SEQUENCES. Ignored if `sequence` is set. */
+  sequenceName?: string
+  /**
+   * Micro-saccades — small eye movements between expression changes. Scaled by `motion`,
+   * so a caller who has already asked for stillness gets it.
+   */
+  life?: boolean
   /** Silhouette to wear. Defaults to the baked-in SHAPE. */
   shape?: MascotShape
   gradient?: [string, string, string]
@@ -1931,6 +2205,9 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       autoBlink = true,
       autoExpression = true,
       paused = false,
+      sequence = null,
+      sequenceName,
+      life = true,
       shape = SHAPE,
       gradient = DEFAULT_GRADIENT,
       eyeColor = '#ffffff',
@@ -1965,6 +2242,21 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
     )
     const motionStrength = motion ?? (prefersReducedMotion ? 0 : 1)
 
+    /*
+      Validated once rather than per frame. A step pointing at an expression that does not
+      exist is a thing an app can hand us, and it must not throw inside the frame loop.
+    */
+    const activeSequence = useMemo(
+      () =>
+        resolveSequence(
+          sequence ?? (sequenceName ? SEQUENCES[sequenceName] : null),
+          EXPRESSION_COUNT
+        ),
+      [sequence, sequenceName]
+    )
+    // Per instance, so a page showing forty mascots does not saccade in lockstep.
+    const saccadeSeed = useMemo(() => lifeSeed(uid), [uid])
+
     // Frame-loop state lives in a ref so prop changes never restart a morph.
     const engine = useRef({
       current: clone(EXPRESSIONS[0]),
@@ -1979,6 +2271,8 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       blinkStart: null as number | null,
       spinStart: null as number | null,
       spinDuration: 900,
+      /** Set by a sequence step so its transition feel outlives the effect that set it. */
+      springOverride: null as number | null,
       last: 0,
       stateStart: 0,
       lastState: state as MascotState,
@@ -1995,6 +2289,9 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         motionStrength,
         effects,
         glyphs,
+        life,
+        saccadeSeed,
+        sequenceMotion: activeSequence?.motion ?? null,
       },
     })
     engine.current.props = {
@@ -2009,6 +2306,9 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       motionStrength,
       effects,
       glyphs,
+      life,
+      saccadeSeed,
+      sequenceMotion: activeSequence?.motion ?? null,
     }
 
     const selectExpression = (index: number) => {
@@ -2042,12 +2342,48 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
     )
 
     useEffect(() => {
-      selectExpression(expression ?? POOLS[state][0])
-    }, [state, expression])
+      selectExpression(expression ?? activeSequence?.steps[0].expression ?? POOLS[state][0])
+    }, [state, expression, activeSequence])
 
+    /*
+      Two ways to change face, and only one runs at a time.
+
+      A state picks at random from its pool on a cadence, which is what makes a mood look
+      unscripted. A sequence walks its steps in order, holding each for its own time — the
+      order is the content, so randomising it would destroy the thing being authored.
+
+      Both stop dead when the caller pins an expression, and both stop when paused. The
+      sequence path also honours its own transition feel per step by overriding the spring
+      for the duration of that morph.
+    */
     useEffect(() => {
       if (!autoExpression || expression !== undefined || paused) return
       let timer: ReturnType<typeof setTimeout>
+
+      if (activeSequence) {
+        const steps = activeSequence.steps
+        let cursor = sequenceCursorStart()
+        const play = (first: boolean) => {
+          const step = steps[cursor.index]
+          engine.current.springOverride = sequenceSpring(
+            step.transition,
+            step.transitionMs,
+            spring
+          )
+          if (!first) selectExpression(step.expression)
+          if (cursor.done) return
+          timer = setTimeout(() => {
+            cursor = advanceSequence(steps.length, cursor, activeSequence.playback)
+            play(false)
+          }, step.holdMs + step.transitionMs)
+        }
+        play(true)
+        return () => {
+          clearTimeout(timer)
+          engine.current.springOverride = null
+        }
+      }
+
       const tick = () => {
         const [lo, hi] = EXPR_CADENCE[state]
         timer = setTimeout(() => {
@@ -2063,10 +2399,12 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       }
       tick()
       return () => clearTimeout(timer)
-    }, [state, autoExpression, expression, paused])
+    }, [state, autoExpression, expression, paused, activeSequence, spring])
 
     useEffect(() => {
-      const cadence = BLINK[state]
+      const cadence = activeSequence
+        ? activeSequence.blink && ([activeSequence.blink.minMs, activeSequence.blink.maxMs] as const)
+        : BLINK[state]
       if (!autoBlink || !cadence || paused) return
       let timer: ReturnType<typeof setTimeout>
       const tick = () => {
@@ -2077,7 +2415,7 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       }
       tick()
       return () => clearTimeout(timer)
-    }, [state, autoBlink, paused])
+    }, [state, autoBlink, paused, activeSequence])
 
     useEffect(() => {
       let frame = 0
@@ -2095,6 +2433,15 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         )
         const gx = clamp(p.gaze?.x ?? 0, -1, 1) * GAZE_X
         const gy = clamp(p.gaze?.y ?? 0, -1, 1) * GAZE_Y
+        /*
+          Micro-saccades ride on top of the constant aim, and only on the eyes: gx/gy move
+          the whole face because a deliberate look turns the head with it, but a saccade is
+          the eyes alone moving inside a face that stays put.
+        */
+        const [sx, sy] =
+          p.life === false
+            ? [0, 0]
+            : saccadeOffset(now, p.saccadeSeed ?? 0, p.motionStrength ?? 1)
         const radians = (((p.turn ?? 0) + spinTurn) * Math.PI) / 180
         const eyeSize = resolveEyeScale(p.eyeScale, rings)
         const blink = blinkScale(e, now)
@@ -2111,8 +2458,8 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
           el.setAttribute('d', toPath(ring))
           el.setAttribute(
             'transform',
-            `translate(${(SPHERE_C + SPHERE_R * Math.sin(longitude) + gx).toFixed(2)} ${(
-              c[1] + gy
+            `translate(${(SPHERE_C + SPHERE_R * Math.sin(longitude) + gx + sx).toFixed(2)} ${(
+              c[1] + gy + sy
             ).toFixed(2)}) scale(${clamp(perspective * size[0], 0.02, 2.4).toFixed(4)} ${clamp(
               blink * size[1],
               0.02,
@@ -2147,12 +2494,19 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         // rather than in an effect — the loop already has the clock.
         const bodyEl = bodyGroup.current
         if (bodyEl) {
-          if (p.state !== e.lastState) {
-            e.lastState = p.state as MascotState
+          /*
+            A sequence may borrow a state's body motion by name; otherwise the state it is
+            playing under supplies it. The clock restarts on the motion, not on the state,
+            or a one-shot entrance would fail to replay when only the borrowed motion
+            changed.
+          */
+          const motionKey = (p.sequenceMotion ?? p.state) as MascotState
+          if (motionKey !== e.lastState) {
+            e.lastState = motionKey
             e.stateStart = now
           }
           const transform = bodyTransform(
-            MOTION[p.state as MascotState] ?? {},
+            MOTION[motionKey] ?? {},
             now - e.stateStart,
             p.motionStrength ?? 1
           )
@@ -2190,7 +2544,7 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
         e.last = now
         if (p.paused) return
 
-        const f = p.spring ?? 7
+        const f = e.springOverride ?? p.spring ?? 7
         e.velocity += (-2 * f * e.velocity - f * f * (e.morph - 1)) * dt
         e.morph += e.velocity * dt
         if (!Number.isFinite(e.morph)) {

@@ -8,6 +8,7 @@
 
 import engineSource from '../engine/faceEngine.tsx?raw'
 import type { MascotShape } from '../engine/faceEngine'
+import { toSequence, type CustomState } from '../state/project'
 
 export interface ExportOptions {
   /** Base name, e.g. "Robo" produces RoboAvatar, RoboState, ROBO_STATES. */
@@ -20,28 +21,39 @@ export interface ExportOptions {
   motion: number
   effects: boolean
   glyphs: boolean
+  /** States built in the studio, baked in so the recipient can play them by name. */
+  customStates?: CustomState[]
 }
 
 const SHAPE_START = '/* __SHAPE_START__ */'
 const SHAPE_END = '/* __SHAPE_END__ */'
+const SEQUENCES_START = '/* __SEQUENCES_START__ */'
+const SEQUENCES_END = '/* __SEQUENCES_END__ */'
 
 export function generateComponent(options: ExportOptions): string {
-  const { componentName, shape, gradient, eyeColor, lookAround, gaze, motion, effects, glyphs } =
-    options
+  const {
+    componentName,
+    shape,
+    gradient,
+    eyeColor,
+    lookAround,
+    gaze,
+    motion,
+    effects,
+    glyphs,
+    customStates = [],
+  } = options
   const base = sanitizeName(componentName)
 
   let source = engineSource
 
   // 1. Swap in this mascot's silhouette.
-  const start = source.indexOf(SHAPE_START)
-  const end = source.indexOf(SHAPE_END)
-  if (start < 0 || end < 0) throw new Error('engine source is missing its shape markers')
-  source =
-    source.slice(0, start) +
-    shapeBlock(shape) +
-    source.slice(end + SHAPE_END.length)
+  source = replaceBlock(source, SHAPE_START, SHAPE_END, shapeBlock(shape))
 
-  // 2. Bake the chosen colours and gaze as the defaults.
+  // 2. Bake any states built in the studio, so they travel with the component.
+  source = replaceBlock(source, SEQUENCES_START, SEQUENCES_END, sequencesBlock(customStates))
+
+  // 3. Bake the chosen colours and gaze as the defaults.
   source = source.replace(
     /export const DEFAULT_GRADIENT: \[string, string, string\] = \[[^\]]*\]/,
     `export const DEFAULT_GRADIENT: [string, string, string] = ${JSON.stringify(gradient)}`
@@ -59,14 +71,60 @@ export function generateComponent(options: ExportOptions): string {
   source = source.replace(/effects = true,/, `effects = ${effects},`)
   source = source.replace(/glyphs = true,/, `glyphs = ${glyphs},`)
 
-  // 3. Rebrand.
+  // 4. Rebrand.
   source = source.replace(/\bMascot/g, base).replace(/\bMASCOT_/g, upperSnake(base) + '_')
 
-  // 4. Replace the generated-file header with one that makes sense to the recipient.
+  // 5. Replace the generated-file header with one that makes sense to the recipient.
   source = source.replace(/^\/\*\*[\s\S]*?\*\/\n/, header(base, shape.name))
 
   return source
 }
+
+function replaceBlock(source: string, start: string, end: string, body: string): string {
+  const from = source.indexOf(start)
+  const to = source.indexOf(end)
+  if (from < 0 || to < 0) throw new Error(`engine source is missing its ${start} markers`)
+  return source.slice(0, from) + body + source.slice(to + end.length)
+}
+
+/**
+ * The studio's states, as a lookup the exported component can play by name.
+ *
+ * Keys are slugs rather than the display names, because this becomes a prop value someone
+ * types. Resolved through the same validation the engine uses, so a step pointing at a
+ * missing expression is dropped here rather than shipped and thrown at runtime.
+ */
+function sequencesBlock(customStates: CustomState[]): string {
+  const used = new Set<string>()
+  const entries = customStates.flatMap(state => {
+    const sequence = toSequence(state)
+    if (!sequence) return []
+    let key = sequenceKey(state.name)
+    let suffix = 2
+    while (used.has(key)) key = `${sequenceKey(state.name)}-${suffix++}`
+    used.add(key)
+    return [`  ${JSON.stringify(key)}: ${JSON.stringify(sequence)},`]
+  })
+  return entries.length
+    ? `export const SEQUENCES: Record<string, SequenceDef> = {\n${entries.join('\n')}\n}`
+    : 'export const SEQUENCES: Record<string, SequenceDef> = {}'
+}
+
+/**
+ * The key a custom state gets in the exported SEQUENCES map.
+ *
+ * Exported because two panels show it back to the user, and a preview that disagrees with
+ * what the file actually contains is worse than no preview. Collisions get a numeric suffix
+ * at build time, which a single-name preview cannot know about.
+ */
+export const sequenceKey = (name: string) =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'state'
 
 function shapeBlock(shape: MascotShape): string {
   return [

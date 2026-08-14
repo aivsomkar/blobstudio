@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { MascotShape } from '../engine/faceEngine'
-import { downloadFile, generateComponent, sanitizeName } from '../export/generate'
+import { downloadFile, generateComponent, sanitizeName, sequenceKey } from '../export/generate'
 import { buildLibrary } from '../export/library'
 import { downloadBlob } from '../export/zip'
 import { EXPRESSION_COUNT, MASCOT_STATES, MOUTH_STROKE } from '../engine/faceEngine'
+import type { CustomState } from '../state/project'
 
 interface Props {
   defaultName: string
@@ -15,6 +16,7 @@ interface Props {
   motion: number
   effects: boolean
   glyphs: boolean
+  customStates: CustomState[]
 }
 
 export function ExportPanel({
@@ -27,6 +29,7 @@ export function ExportPanel({
   motion,
   effects,
   glyphs,
+  customStates,
 }: Props) {
   const [raw, setRaw] = useState(defaultName)
   const [copied, setCopied] = useState(false)
@@ -48,8 +51,9 @@ export function ExportPanel({
         motion,
         effects,
         glyphs,
+        customStates,
       }),
-    [raw, shape, gradient, eyeColor, lookAround, gaze, motion, effects, glyphs]
+    [raw, shape, gradient, eyeColor, lookAround, gaze, motion, effects, glyphs, customStates]
   )
 
   // Test seam: lets an automated run assert against the exact source a user would download.
@@ -73,7 +77,12 @@ export function ExportPanel({
       </label>
 
       <pre className="usage">
-        {`import ${base}Avatar from './${base}Avatar'\n\n<${base}Avatar state="thinking" size={160} />`}
+        {`import ${base}Avatar from './${base}Avatar'\n\n<${base}Avatar state="thinking" size={160} />` +
+          (customStates.length
+            ? `\n\n// your states travel with it\n<${base}Avatar sequenceName=${JSON.stringify(
+                sequenceKey(customStates[0].name)
+              )} />`
+            : '')}
       </pre>
 
       <div className="row">
@@ -85,7 +94,11 @@ export function ExportPanel({
 
       <p className="hint">
         One file, {Math.round(source.length / 1024)} KB, React as the only dependency. Your
-        shape, colours and fit are baked in.
+        shape, colours and fit are baked in
+        {customStates.length
+          ? `, along with ${customStates.length} state${customStates.length === 1 ? '' : 's'} you built`
+          : ''}
+        .
       </p>
 
       <hr />
@@ -136,6 +149,7 @@ export function ExportPanel({
                 motion,
                 effects,
                 glyphs,
+                customStates,
                 includePng,
                 pngSize,
                 frames: {

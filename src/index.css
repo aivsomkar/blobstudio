@@ -56,6 +56,10 @@ body {
 .banner {
   border-radius: var(--radius);
   padding: 12px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .banner.error {
@@ -375,9 +379,14 @@ button.wide {
   height: auto;
 }
 
+/*
+  A .cell is a <button>, so button.on has already painted it accent. Restating the accent
+  as the text colour here would put green on green — the caption of the one selected state
+  is exactly the caption you need to be able to read.
+*/
 .cell.on {
   border-color: var(--accent);
-  color: var(--accent);
+  color: #fff;
 }
 
 .cell figcaption {
@@ -737,4 +746,184 @@ button.mini:disabled {
 
 button.mini:disabled:hover {
   border-color: var(--border);
+}
+
+/* A standalone caption above a group of chips, matching .field's own label. */
+.field-label {
+  display: block;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font: 11px ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+button.danger {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+button.danger:hover {
+  background: color-mix(in srgb, var(--bad) 14%, var(--card));
+  border-color: var(--bad);
+}
+
+/* --------------------------------------------------------------- your states */
+
+.state-list {
+  display: grid;
+  gap: 6px;
+}
+
+.state-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 5px;
+}
+
+.state-row.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.state-row button {
+  border: none;
+  padding: 4px 7px;
+}
+
+.state-play {
+  font-size: 11px;
+  min-width: 26px;
+  justify-content: center;
+}
+
+.state-name {
+  flex: 1;
+  display: grid !important;
+  gap: 1px;
+  text-align: left;
+  justify-items: start;
+}
+
+.state-name strong {
+  font: 12px ui-monospace, monospace;
+}
+
+.state-name em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.steps {
+  display: grid;
+  gap: 8px;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 9px;
+  align-items: start;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+}
+
+.step-face {
+  padding: 2px;
+  line-height: 0;
+  border-radius: 9px;
+}
+
+.step-face.clips {
+  border-color: var(--bad);
+}
+
+.step-knobs {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.step-order {
+  display: grid;
+  gap: 3px;
+}
+
+.step-order button {
+  padding: 2px 6px;
+  font-size: 11px;
+  justify-content: center;
+}
+
+.step-order button:disabled,
+.step button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.picker {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px dashed var(--border);
+  border-radius: 11px;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 5px;
+}
+
+.picker-grid button {
+  padding: 2px;
+  line-height: 0;
+  border-radius: 8px;
+}
+
+.picker-grid button.clips {
+  border-color: var(--bad);
+}
+
+.field select {
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 7px 10px;
+  font: 12px ui-monospace, monospace;
+}
+
+/* Timings sit beside a face, so they get a column rather than the panel's full width. */
+.step-knobs .scrub {
+  grid-template-columns: 58px minmax(0, 130px);
+}
+
+/*
+  A missing effect has a cause, and the cause is a toggle somewhere else on the page. This
+  is a nudge rather than a warning — nothing is broken, it is just switched off.
+*/
+.suppressed {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.suppressed button {
+  border-color: currentColor;
+  color: inherit;
+  flex: none;
 }
