@@ -280,6 +280,26 @@ first.
   shape and colours so they stay honest, with any that clip ringed in red.
 - **Dark stage** — a mascot reads differently on light and dark, and both ship.
 
+## Downloading a video
+
+**Download video** records the mascot playing every state in order — lifecycle, reactions,
+agent morphs, product cycle — a second each, on a black or white background.
+
+It is recorded rather than rendered. A canvas capture stream feeding `MediaRecorder` is the
+only way to get a video out of a browser without uploading anything or taking on an encoder
+dependency, and both of those are things this tool does not do. The consequence is that
+recording happens in real time: a forty-state reel takes forty seconds to make because it
+takes forty seconds to watch.
+
+The mascot being filmed is a second copy mounted off-stage at 1080², not the preview, so the
+video is a fixed square whatever size the page happens to be. It is positioned off-screen
+rather than hidden, because `display: none` and `visibility: hidden` both stop an element
+rendering, and something that is not rendering cannot be rasterised.
+
+Container depends on the browser: Chrome and Edge record MP4, Firefox WebM. Each frame is
+serialised and decoded, so a slow machine drops frames rather than stretching time —
+`MediaRecorder` timestamps what it actually receives.
+
 ## Downloading the library
 
 The component on its own only helps a React project. **Download library (.zip)** packages

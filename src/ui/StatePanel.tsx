@@ -85,7 +85,7 @@ export function StatePanel({
         )}
       </div>
 
-      <p className="hint" style={{ marginTop: 0 }}>
+      <p className="hint">
         The {MASCOT_STATES.length} built-in states pick from a pool at random, which is what
         makes a mood look unscripted. A state you build here runs its steps in order, so you
         can script a beat — or add the one your app needs that the lab never had.

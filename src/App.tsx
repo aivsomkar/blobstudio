@@ -19,6 +19,7 @@ import {
   loadProject,
   parseProjectFile,
   projectFileName,
+  prefersReducedMotion,
   ProjectFileError,
   saveProject,
   serializeProject,
@@ -35,6 +36,7 @@ import { FitPanel } from './ui/FitPanel'
 import { ColorPanel } from './ui/ColorPanel'
 import { StateGrid } from './ui/StateGrid'
 import { ExportPanel } from './ui/ExportPanel'
+import { VideoPanel } from './ui/VideoPanel'
 import { PhotoPanel } from './ui/PhotoPanel'
 import { ProjectPanel } from './ui/ProjectPanel'
 import { ShapePanel } from './ui/ShapePanel'
@@ -66,7 +68,12 @@ export default function App() {
   const [lookAround, setLookAround] = useState(initial.lookAround)
   // A touch off-centre by default: dead-centre eyes read as a stare.
   const [gaze, setGaze] = useState<Aim>(initial.gaze)
-  const [motion, setMotion] = useState(initial.motion)
+  /*
+    A stored project can carry a motion value from before the machine asked for less, so the
+    preference wins on load and the saved number is only a starting point. Dragging the
+    slider is still an explicit override, which is the one signal that should beat it.
+  */
+  const [motion, setMotion] = useState(prefersReducedMotion() ? 0 : initial.motion)
   const [gradient, setGradient] = useState<[string, string, string]>(initial.gradient)
   const [eyeColor, setEyeColor] = useState(initial.eyeColor)
   const [showMouth, setShowMouth] = useState(initial.showMouth)
@@ -624,6 +631,21 @@ export default function App() {
               gradient={gradient}
               paused={paused}
               onPaused={setPaused}
+            />
+          )}
+
+          {shape && (
+            <VideoPanel
+              name={mascot!.name}
+              shape={shape}
+              gradient={gradient}
+              eyeColor={eyeColor}
+              showMouth={showMouth}
+              lookAround={lookAround}
+              gaze={gaze}
+              motion={motion}
+              effects={effects}
+              glyphs={glyphs}
             />
           )}
 

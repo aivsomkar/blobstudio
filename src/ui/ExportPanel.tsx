@@ -104,7 +104,7 @@ export function ExportPanel({
       <hr />
 
       <h2>Whole library</h2>
-      <p className="hint" style={{ marginTop: 0 }}>
+      <p className="hint">
         The component plus every expression and state as a still SVG, a sprite for plain
         HTML, and a manifest — so it drops into any app, not just a React one.
       </p>

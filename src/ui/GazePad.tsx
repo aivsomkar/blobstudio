@@ -96,7 +96,7 @@ export function GazePad({ gaze, onChange }: Props) {
               </button>
             ))}
           </div>
-          <p className="hint" style={{ marginTop: 10 }}>
+          <p className="hint">
             Where the eyes rest, on top of whatever each expression does. Drag the pad or use
             the arrow keys.
           </p>

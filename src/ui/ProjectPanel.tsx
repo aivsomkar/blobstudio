@@ -19,7 +19,7 @@ export function ProjectPanel({ status, onSave, onOpen, onReset }: Props) {
   return (
     <div className="panel">
       <h2>Project</h2>
-      <p className="hint" style={{ marginTop: 0 }}>
+      <p className="hint">
         Your shape, fit, colours and settings save to this browser as you work. Download the
         project to move it somewhere else — or to keep it, since clearing site data takes the
         stored copy with it.

@@ -2,7 +2,7 @@
   --page: #f1efe8;
   --card: #fffdf7;
   --ink: #171813;
-  --muted: #6e7067;
+  --muted: #5f6157;
   --border: #d9d5c9;
   --accent: #1c7a4c;
   --bad: #b4432a;
@@ -15,7 +15,7 @@
     --page: #11130f;
     --card: #1b1e18;
     --ink: #f3f0e7;
-    --muted: #a5a89d;
+    --muted: #b0b3a8;
     --border: #363a30;
     --accent: #4cc182;
     --bad: #ff8b6b;
@@ -95,6 +95,27 @@ body {
   justify-items: center;
   position: sticky;
   top: 20px;
+  /*
+    Stated rather than inherited from document order. A sticky element outranks static
+    siblings, but not positioned ones — and panels contain plenty of those, which would
+    otherwise paint through the card as it scrolls past.
+  */
+  z-index: 1;
+}
+
+/*
+  One column has nothing to scroll beside, so a sticky stage simply parks itself over the
+  panels — and because several panel children are themselves positioned, they punch back
+  through it, leaving some content above the stage and some hidden behind it. It only has a
+  job while a second column is moving past it.
+
+  This has to sit after the rule above, not with the other responsive overrides higher up:
+  same specificity, so the later declaration is the one that wins.
+*/
+@media (max-width: 900px) {
+  .stage {
+    position: static;
+  }
 }
 
 .preview {
@@ -257,6 +278,17 @@ button.wide {
   color: var(--muted);
 }
 
+/*
+  Form controls do not inherit the page's font, so any input without its own rule falls back
+  to the UA default — 13.333px here, which is both off the scale and fractional. This is the
+  floor; the specific rules below still win.
+*/
+input,
+textarea,
+select {
+  font: 13px ui-monospace, monospace;
+}
+
 .field input {
   background: var(--page);
   border: 1px solid var(--border);
@@ -332,6 +364,17 @@ button.wide {
   margin: 8px 0 0;
 }
 
+/*
+  A hint that opens a panel sits directly under the heading, which already carries its own
+  bottom margin. Adding the hint's on top of it made the gap under a heading depend on
+  whether a hint happened to follow — so the rule handles it, rather than each panel
+  patching itself inline.
+*/
+.panel > h2 + .hint,
+.panel > .panel-head + .hint {
+  margin-top: 0;
+}
+
 .warning {
   color: var(--bad);
 }
@@ -341,7 +384,7 @@ button.wide {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 12px;
-  font: 11.5px/1.6 ui-monospace, monospace;
+  font: 12px/1.6 ui-monospace, monospace;
   color: var(--muted);
   overflow-x: auto;
   margin: 0 0 12px;
@@ -370,7 +413,7 @@ button.wide {
   padding: 7px;
   background: var(--card);
   border-radius: 12px;
-  font: 10.5px ui-monospace, monospace;
+  font: 11px ui-monospace, monospace;
   color: var(--muted);
 }
 
@@ -479,6 +522,14 @@ footer {
   gap: 8px;
 }
 
+/* A control group following explanatory text needs the same air as one following a
+   heading, or the next label reads as part of the paragraph. */
+.hint + .scrubs,
+.hint + .row,
+.hint + .chips {
+  margin-top: 12px;
+}
+
 .scrubs.two {
   grid-template-columns: 1fr 1fr;
   gap: 8px 12px;
@@ -559,11 +610,16 @@ footer {
   border-top: 1px solid var(--border);
 }
 
+/*
+  Sentence case, where h2 is uppercase micro-caps. They were identical, which left a
+  subsection looking exactly like a section — the tracking and the caps are what mark a
+  panel title, so a sub-heading has to give them up to sit below one.
+*/
 .panel-head h3 {
-  font-size: 11px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
   margin: 0;
 }
 
@@ -815,7 +871,7 @@ button.danger:hover {
 
 .state-name em {
   font-style: normal;
-  font-size: 10.5px;
+  font-size: 11px;
   color: var(--muted);
 }
 
@@ -926,4 +982,61 @@ button.danger:hover {
   border-color: currentColor;
   color: inherit;
   flex: none;
+}
+
+/* ------------------------------------------------------------------ video */
+
+/*
+  The copy being filmed. Pushed off to the side rather than hidden, because `display: none`
+  and `visibility: hidden` both stop it rendering, and something that is not rendering
+  cannot be rasterised.
+*/
+.offstage {
+  position: fixed;
+  left: -20000px;
+  top: 0;
+  width: 1080px;
+  height: 1080px;
+  pointer-events: none;
+}
+
+.progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--page);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  margin: 12px 0 8px;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+
+/* ------------------------------------------------------------------ focus */
+
+/*
+  A designed focus ring.
+  
+  Every control here relied on the browser's default, which in Chrome is a blue that appears
+  nowhere else in this palette. Keyboard users get the same accent everything else uses, and
+  `:focus-visible` keeps it off pointer clicks.
+*/
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 9px;
+}
+
+.thumb:focus-visible,
+.shape-tile:focus-visible,
+.cell:focus-visible {
+  outline-offset: 3px;
 }

@@ -68,7 +68,7 @@ export function PhotoPanel({ getSvg, name, state, gradient, paused, onPaused }: 
   return (
     <div className="panel">
       <h2>Photo</h2>
-      <p className="hint" style={{ marginTop: 0 }}>
+      <p className="hint">
         The frame on the stage right now, exactly as it stands — mid-bounce, mid-orbit,
         confetti still in the air. The library export renders clean catalogue stills instead.
       </p>

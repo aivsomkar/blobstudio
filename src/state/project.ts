@@ -266,6 +266,12 @@ const shapeParams = (value: unknown, shapeId: string | null): Record<string, num
   return out
 }
 
+/** Whether this machine has asked for less movement. */
+export const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 export const defaultProject = (): Project => {
   const circle = BUILTIN_SHAPES[0]
   return {
@@ -277,7 +283,15 @@ export const defaultProject = (): Project => {
     anchor: { x: FACE_BOX / 2, y: FACE_BOX / 2, scale: 1 },
     gaze: { x: 0.22, y: 0 },
     lookAround: 0.35,
-    motion: 1,
+    /*
+      Full motion unless the machine has asked for less.
+
+      The engine already falls back to stillness when `motion` is left undefined, but this
+      page always supplies the prop — so that fallback never ran here, and a viewer who had
+      asked for reduced motion still got forty mascots moving at once. Reading the
+      preference into the default is what actually honours it.
+    */
+    motion: prefersReducedMotion() ? 0 : 1,
     spring: 7,
     eyes: { left: [1, 1], right: [1, 1] },
     linkedEyes: true,
