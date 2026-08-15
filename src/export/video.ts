@@ -12,14 +12,22 @@
  */
 import type { MascotState } from '../engine/faceEngine'
 
+/** One held pose: a state, optionally with a specific face pinned on it. */
+export interface Step {
+  state: MascotState
+  expression?: number
+  /** How long this pose is held, ms. */
+  hold: number
+}
+
 export interface RecordOptions {
-  /** Puts a state on screen. The caller re-renders; the recorder waits a frame for it. */
-  show: (state: MascotState) => void
+  /** Puts a pose on screen. The caller re-renders; the recorder waits a frame for it. */
+  show: (step: Step) => void
+  /** Called as each pose begins, so the caller can punctuate — a blink, say. */
+  onStep?: (index: number, step: Step) => void
   /** The live SVG being recorded. Read fresh each frame, since React replaces attributes. */
   getSvg: () => SVGSVGElement | null
-  states: MascotState[]
-  /** How long each state is held, ms. */
-  hold: number
+  steps: Step[]
   /** Square edge, in pixels. */
   size: number
   fps: number
@@ -90,7 +98,7 @@ export async function recordStates(options: RecordOptions): Promise<Recording> {
   const format = pickFormat()
   if (!format) throw new Error('This browser cannot record video.')
 
-  const { show, getSvg, states, hold, size, fps, background, onProgress, signal } = options
+  const { show, onStep, getSvg, steps, size, fps, background, onProgress, signal } = options
 
   const canvas = document.createElement('canvas')
   canvas.width = size
@@ -118,7 +126,15 @@ export async function recordStates(options: RecordOptions): Promise<Recording> {
 
   recorder.start()
   try {
-    const total = states.length * hold
+    // Poses can be held for different lengths, so the running total is what maps a moment
+    // to a pose rather than a single division.
+    const ends: number[] = []
+    let running = 0
+    for (const step of steps) {
+      running += step.hold
+      ends.push(running)
+    }
+    const total = running
     const started = performance.now()
     let showing = -1
 
@@ -127,11 +143,13 @@ export async function recordStates(options: RecordOptions): Promise<Recording> {
       const elapsed = performance.now() - started
       if (elapsed >= total) break
 
-      const index = Math.min(Math.floor(elapsed / hold), states.length - 1)
+      let index = ends.findIndex(end => elapsed < end)
+      if (index < 0) index = steps.length - 1
       if (index !== showing) {
         showing = index
-        show(states[index])
-        // One frame for React to commit the new state before it is rasterised.
+        show(steps[index])
+        onStep?.(index, steps[index])
+        // One frame for React to commit the new pose before it is rasterised.
         await nextFrame()
       }
 

@@ -2569,7 +2569,23 @@ export const MascotAvatar = React.forwardRef<MascotAvatarHandle, MascotAvatarPro
       // kind that bites later.
     }, [uid])
 
-    const paint = `url(#${uid}-grad)`
+    /*
+      What the extras are made of.
+
+      The loading dots, the pieces shed on spawn and shutdown, and the glyph the mascot
+      turns into are all meant to read as the same stuff as the body. That is the instance
+      gradient whenever the body takes it — but artwork that kept its own colours never
+      does, and those parts would then arrive in a gradient that appears nowhere else on
+      screen: a red logo dissolving into green dots.
+
+      Artwork gradients survive this, because the import inlines their defs alongside the
+      body, so a `url(#…)` fill still resolves.
+    */
+    const paint = useMemo(() => {
+      if (shape.body.includes('{{GRADIENT}}')) return `url(#${uid}-grad)`
+      const own = shape.body.match(/fill="(?!none)([^"]+)"/)
+      return own ? own[1] : `url(#${uid}-grad)`
+    }, [shape.body, uid])
     const paintRef = useRef(paint)
     paintRef.current = paint
 

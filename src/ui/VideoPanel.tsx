@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
 import {
+  EXPRESSION_COUNT,
   MascotAvatar,
+  POOLS,
   STATE_GROUPS,
+  type MascotAvatarHandle,
   type MascotShape,
-  type MascotState,
 } from '../engine/faceEngine'
-import { downloadBlob, recordStates, videoSupported } from '../export/video'
+import { downloadBlob, recordStates, videoSupported, type Step } from '../export/video'
 import { sanitizeName } from '../export/generate'
 
 /**
@@ -30,26 +32,64 @@ interface Props {
 
 const SIZE = 1080
 const FPS = 30
-const HOLD = 1000
+/** How long each state gets, split between the faces it rests on. */
+const STATE_HOLD = 760
+/** Faces per state. Two is enough to read as alive without turning a reel into a flicker. */
+const FACES_PER_STATE = 2
+/** How long each face gets in the closing sweep through the full set. */
+const EXPRESSION_HOLD = 380
+
+/*
+  The running order.
+
+  Left to itself the mascot barely moves here: the engine drifts between faces on its own
+  cadence, which runs from 800ms to nine seconds, so inside a second-long hold it almost
+  never changes — and 40 states share only 17 resting faces between them, expression 6
+  alone covering eight of them. The result was long stretches where consecutive states
+  looked identical and nothing on screen moved.
+
+  So the reel pins the face rather than waiting for the engine to pick one. Each state
+  cycles through its own pool, which keeps a sleeping mascot showing sleepy faces, and the
+  whole expression set plays at the end so every one of them is actually seen.
+*/
+function buildSteps(): Step[] {
+  const steps: Step[] = []
+
+  for (const state of Object.values(STATE_GROUPS).flat()) {
+    const pool = POOLS[state]
+    const faces = Math.min(FACES_PER_STATE, pool.length)
+    for (let i = 0; i < faces; i++) {
+      steps.push({ state, expression: pool[i], hold: STATE_HOLD / faces })
+    }
+  }
+
+  for (let i = 0; i < EXPRESSION_COUNT; i++) {
+    steps.push({ state: 'idle', expression: i, hold: EXPRESSION_HOLD })
+  }
+
+  return steps
+}
 
 export function VideoPanel(props: Props) {
   const { name, shape, gradient, eyeColor, showMouth, lookAround, gaze, motion, effects, glyphs } =
     props
 
-  const states = useMemo(() => Object.values(STATE_GROUPS).flat(), [])
+  const steps = useMemo(buildSteps, [])
+  const stateCount = useMemo(() => Object.values(STATE_GROUPS).flat().length, [])
   const supported = useMemo(videoSupported, [])
 
   const [recording, setRecording] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [background, setBackground] = useState<'black' | 'white'>('black')
-  // Which state the off-stage copy is holding. Driven by the recorder, not by the page.
-  const [frame, setFrame] = useState<MascotState>(states[0])
+  // Which pose the off-stage copy is holding. Driven by the recorder, not by the page.
+  const [frame, setFrame] = useState<Step>(steps[0])
 
   const stage = useRef<HTMLDivElement>(null)
+  const avatar = useRef<MascotAvatarHandle>(null)
   const abort = useRef<AbortController | null>(null)
 
-  const seconds = Math.round((states.length * HOLD) / 1000)
+  const seconds = Math.round(steps.reduce((total, step) => total + step.hold, 0) / 1000)
   const paper = background === 'black' ? '#000000' : '#ffffff'
 
   const start = async () => {
@@ -62,12 +102,16 @@ export function VideoPanel(props: Props) {
       // A frame for the off-stage mascot to mount before the first rasterise.
       await new Promise(requestAnimationFrame)
       const { blob, extension } = await recordStates({
-        states,
-        hold: HOLD,
+        steps,
         size: SIZE,
         fps: FPS,
         background: paper,
         show: setFrame,
+        // A blink on entering each state, since the engine's own runs on a cadence far
+        // slower than any pose is held for.
+        onStep: (_, step) => {
+          if (step.expression === POOLS[step.state][0]) avatar.current?.blink()
+        },
         getSvg: () => stage.current?.querySelector('svg') ?? null,
         onProgress: setProgress,
         signal: controller.signal,
@@ -88,11 +132,14 @@ export function VideoPanel(props: Props) {
     <div className="panel">
       <div className="panel-head">
         <h2>Video</h2>
-        <span className="count">{states.length} states · {seconds}s</span>
+        <span className="count">
+          {stateCount} states · {EXPRESSION_COUNT} faces · {seconds}s
+        </span>
       </div>
       <p className="hint">
-        Every state in order, a second each, recorded from the live mascot. It records in real
-        time, so it takes about {seconds} seconds — leave the tab in front while it runs.
+        Every state in order, each cycling its own faces, then the whole expression set. It
+        records in real time, so it takes about {seconds} seconds — leave the tab in front
+        while it runs.
       </p>
 
       <span className="field-label">Background</span>
@@ -142,8 +189,10 @@ export function VideoPanel(props: Props) {
       {recording && (
         <div className="offstage" ref={stage} aria-hidden="true">
           <MascotAvatar
+            ref={avatar}
             shape={shape}
-            state={frame}
+            state={frame.state}
+            expression={frame.expression}
             size={SIZE}
             gradient={gradient}
             eyeColor={eyeColor}
