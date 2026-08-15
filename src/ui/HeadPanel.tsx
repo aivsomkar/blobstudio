@@ -1,4 +1,4 @@
-import { Scrub } from './Scrub'
+import { Slider } from './Slider'
 
 /**
  * Eye sizing.
@@ -40,11 +40,11 @@ export function HeadPanel({ eyes, onEyes, linked, onLinked }: Props) {
         </button>
       </div>
 
-      <div className="scrubs two">
-        <Scrub label="Left w" value={eyes.left[0]} onChange={v => setEye('left', 0, v)} min={0.2} max={2.4} step={0.01} precision={2} />
-        <Scrub label="Right w" value={eyes.right[0]} onChange={v => setEye('right', 0, v)} min={0.2} max={2.4} step={0.01} precision={2} />
-        <Scrub label="Left h" value={eyes.left[1]} onChange={v => setEye('left', 1, v)} min={0.2} max={2.4} step={0.01} precision={2} />
-        <Scrub label="Right h" value={eyes.right[1]} onChange={v => setEye('right', 1, v)} min={0.2} max={2.4} step={0.01} precision={2} />
+      <div className="sliders two">
+        <Slider label="Left w" value={eyes.left[0]} onChange={v => setEye('left', 0, v)} min={0.2} max={2.4} step={0.01} />
+        <Slider label="Right w" value={eyes.right[0]} onChange={v => setEye('right', 0, v)} min={0.2} max={2.4} step={0.01} />
+        <Slider label="Left h" value={eyes.left[1]} onChange={v => setEye('left', 1, v)} min={0.2} max={2.4} step={0.01} />
+        <Slider label="Right h" value={eyes.right[1]} onChange={v => setEye('right', 1, v)} min={0.2} max={2.4} step={0.01} />
       </div>
     </div>
   )

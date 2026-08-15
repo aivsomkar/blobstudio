@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { EXPRESSION_COUNT, type MascotShape } from '../engine/faceEngine'
 import type { FrameOptions } from '../export/frames'
 import { FaceThumb, useThumbBody } from './FaceThumb'
-import { Scrub } from './Scrub'
+import { Slider } from './Slider'
 
 /**
  * Every expression as the face it actually is.
@@ -94,15 +94,14 @@ export function ExpressionGrid({
         Expressions are interpolated by a spring, so the face eases between poses rather than
         cutting. Higher is snappier.
       </p>
-      <div className="scrubs">
-        <Scrub
+      <div className="sliders">
+        <Slider
           label="Spring"
           value={spring}
           onChange={onSpring}
           min={1}
           max={20}
           step={0.2}
-          precision={1}
         />
       </div>
       <div className="row">

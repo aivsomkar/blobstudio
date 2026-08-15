@@ -14,7 +14,7 @@ import {
   type CustomState,
 } from '../state/project'
 import { sequenceKey } from '../export/generate'
-import { Scrub } from './Scrub'
+import { Slider } from './Slider'
 
 interface Props {
   states: CustomState[]
@@ -179,7 +179,7 @@ export function StatePanel({
                 </button>
 
                 <div className="step-knobs">
-                  <Scrub
+                  <Slider
                     label="hold"
                     value={step.holdMs}
                     onChange={value =>
@@ -191,10 +191,8 @@ export function StatePanel({
                     min={120}
                     max={20000}
                     step={50}
-                    precision={0}
-                    suffix="ms"
                   />
-                  <Scrub
+                  <Slider
                     label="morph"
                     value={step.transitionMs}
                     onChange={value =>
@@ -208,8 +206,6 @@ export function StatePanel({
                     min={0}
                     max={3000}
                     step={25}
-                    precision={0}
-                    suffix="ms"
                   />
                   <div className="chips">
                     {TRANSITIONS.map(transition => (
@@ -335,8 +331,8 @@ export function StatePanel({
             <span>Blink</span>
           </label>
           {open.blink.enabled && (
-            <div className="scrubs two" style={{ marginTop: 8 }}>
-              <Scrub
+            <div className="sliders two" style={{ marginTop: 8 }}>
+              <Slider
                 label="every"
                 value={open.blink.minMs}
                 onChange={value =>
@@ -348,10 +344,8 @@ export function StatePanel({
                 min={400}
                 max={20000}
                 step={100}
-                precision={0}
-                suffix="ms"
               />
-              <Scrub
+              <Slider
                 label="to"
                 value={open.blink.maxMs}
                 onChange={value =>
@@ -363,8 +357,6 @@ export function StatePanel({
                 min={400}
                 max={20000}
                 step={100}
-                precision={0}
-                suffix="ms"
               />
             </div>
           )}

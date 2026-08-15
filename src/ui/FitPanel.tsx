@@ -1,5 +1,5 @@
 import { FACE_BOX } from '../engine/faceEngine'
-import { Scrub } from './Scrub'
+import { Slider } from './Slider'
 
 interface Props {
   anchor: { x: number; y: number; scale: number }
@@ -45,47 +45,38 @@ export function FitPanel({
         )}
       </div>
 
-      {/* Scrubs rather than sliders, like every other numeric control on the page. A slider
-          spends its width encoding a range, and this panel has five values to fit. */}
-      <div className="scrubs">
-        <Scrub
+      <div className="sliders">
+        <Slider
           label="Size"
           value={anchor.scale}
           onChange={scale => onChange({ scale })}
           min={0.1}
           max={1.6}
           step={0.01}
-          precision={2}
-          suffix="×"
         />
-        <Scrub
+        <Slider
           label="Across"
           value={anchor.x}
           onChange={x => onChange({ x })}
           min={0}
           max={FACE_BOX}
           step={1}
-          precision={0}
-          suffix="u"
         />
-        <Scrub
+        <Slider
           label="Down"
           value={anchor.y}
           onChange={y => onChange({ y })}
           min={0}
           max={FACE_BOX}
           step={1}
-          precision={0}
-          suffix="u"
         />
-        <Scrub
+        <Slider
           label="Look around"
           value={lookAround}
           onChange={onLookAround}
           min={0}
           max={1}
           step={0.01}
-          precision={2}
         />
       </div>
       <p className="hint">
@@ -93,15 +84,14 @@ export function FitPanel({
         straight at you; higher values need a smaller face to stay inside the shape.
       </p>
 
-      <div className="scrubs">
-        <Scrub
+      <div className="sliders">
+        <Slider
           label="Body motion"
           value={motion}
           onChange={onMotion}
           min={0}
           max={1.5}
           step={0.01}
-          precision={2}
         />
       </div>
       <p className="hint">

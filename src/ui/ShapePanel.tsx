@@ -1,5 +1,5 @@
 import { BUILTIN_SHAPES, type BuiltinShape } from '../shapes/builtin'
-import { Scrub } from './Scrub'
+import { Slider } from './Slider'
 
 /**
  * The starting shape and its own knobs.
@@ -49,9 +49,9 @@ export function ShapePanel({ shapeId, params, onPick, onParam, busy }: Props) {
       </div>
 
       {active ? (
-        <div className="scrubs">
+        <div className="sliders">
           {active.params.map(param => (
-            <Scrub
+            <Slider
               key={param.key}
               label={param.label}
               value={params[param.key] ?? active.defaults[param.key]}
@@ -59,8 +59,6 @@ export function ShapePanel({ shapeId, params, onPick, onParam, busy }: Props) {
               min={param.min}
               max={param.max}
               step={param.step}
-              precision={param.precision}
-              suffix={param.suffix}
             />
           ))}
         </div>
